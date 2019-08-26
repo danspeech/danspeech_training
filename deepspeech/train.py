@@ -2,16 +2,18 @@ import os
 import time
 import tqdm
 import warnings
+import json
 
 import torch
 # -- warpctc bindings for pytorch can be found here: https://github.com/SeanNaren/warp-ctc
 from warpctc_pytorch import CTCLoss
 
-from danspeech.audio.datasets import BatchDataLoader, DanSpeechDataset
-from danspeech.audio.parsers import SpectrogramAudioParser
-from danspeech.audio.augmentation import DanSpeechAugmenter
+from audio.datasets import BatchDataLoader, DanSpeechDataset
+from audio.parsers import SpectrogramAudioParser
+from audio.augmentation import DanSpeechAugmenter
+from danspeech.deepspeech.model import DeepSpeech
 from danspeech.deepspeech.decoder import GreedyDecoder
-from danspeech.deepspeech.training_utils import TensorBoardLogger, AverageMeter, reduce_tensor, sum_tensor
+from deepspeech.training_utils import TensorBoardLogger, AverageMeter, reduce_tensor, sum_tensor, get_default_audio_config, pretrained_models
 from danspeech.errors.training_errors import ArgumentMissingForOption
 
 
@@ -27,7 +29,7 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
                  tensorboard_log_dir=None, augmented_training=False, batch_size=32,
                  num_workers=6, cuda=False, lr=3e-4, momentum=0.9, weight_decay=1e-5, max_norm=400,
                  package=None, distributed=False, continue_train=False, finetune=False, train_new=False,
-                 args=None):
+                 num_freeze_layers=None, args=None):
 
     # -- set training device
     main_proc = True
@@ -77,13 +79,54 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
     start_epoch = 0
     start_iter = 0
 
+    # -- initialize DanSpeech augmenter
+    if augmented_training:
+        augmenter = DanSpeechAugmenter(sampling_rate=model.audio_conf["sampling_rate"])
+    else:
+        augmenter = None
+
     # -- load and initialize model metrics based on wrapper function
     if train_new:
-        raise NotImplementedError
+        with open('labels.json', "r", encoding="utf-8") as label_file:
+            labels = str(''.join(json.load(label_file)))
+
+        audio_conf = get_default_audio_config()
+
+        rnn_type = args.rnn_type.lower()
+        assert rnn_type in ["lstm", "rnn", "gru"], "rnn_type should be either lstm, rnn or gru"
+        model = DeepSpeech(conv_layers=args.conv_layers,
+                           rnn_hidden_size=args.hidden_size,
+                           rnn_hidden_layers=args.hidden_layers,
+                           labels=labels,
+                           rnn_type=rnn_type,
+                           audio_conf=audio_conf,
+                           bidirectional=args.bidirectional)
+        parameters = model.parameters()
+        optimizer = torch.optim.SGD(parameters, lr=args.lr,
+                                    momentum=args.momentum, nesterov=True, weight_decay=1e-5)
 
     if finetune:
-        if not package:
-            raise ArgumentMissingForOption("If you want to ")
+        if not model:
+            raise ArgumentMissingForOption("If you want to finetune, please provide a pretrained model name"
+                                           "or a path to a custom pytorch model object")
+        else:
+            print("Loading checkpoint model %s" % model)
+            if model in pretrained_models:
+                from danspeech.pretrained_models import danspeech_primary
+                model = danspeech_primary()
+            else:
+                package = torch.load(model, map_location=lambda storage, loc: storage)
+                model = DeepSpeech.load_model_package(package)
+
+            if num_freeze_layers:
+                model.freeze_layers(num_freeze_layers)
+
+            parameters = model.parameters()
+            optimizer = torch.optim.SGD(parameters, lr=args.lr,
+                                        momentum=args.momentum, nesterov=True, weight_decay=1e-5)
+
+            if logging_process:
+                tensorboard_logger.load_previous_values(start_epoch, package)
 
     if continue_train:
         # -- continue_training wrapper
@@ -118,11 +161,6 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
                 tensorboard_logger.load_previous_values(start_epoch, package)
 
     # -- initialize audio parser and dataset
-    if augmented_training:
-        augmenter = DanSpeechAugmenter(sampling_rate=model.audio_conf["sampling_rate"])
-    else:
-        augmenter = None
-
     # -- audio parsers
     training_parser = SpectrogramAudioParser(audio_config=model.audio_conf, data_augmenter=augmenter)
     validation_parser = SpectrogramAudioParser(audio_config=model.audio_conf, data_augmenter=None)
@@ -182,11 +220,6 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
             for i, (data) in enumerate(train_batch_loader, start=start_iter):
                 if i == len(train_batch_loader):
                     break
-
-                # -- if compression is used, activate compression schedule
-                if compression_scheduler:
-                    compression_scheduler.on_minibatch_begin(epoch, minibatch_id=i,
-                                                             minibatches_per_epoch=len(train_batch_loader))
 
                 # -- grab and prepare a sample for a training pass
                 inputs, targets, input_percentages, target_sizes = data
@@ -340,14 +373,14 @@ def train_new(model, train_data_path, validation_data_path, model_id, model_save
               tensorboard_log_dir=None, **args):
 
     _train_model(model, train_data_path, validation_data_path, model_id, model_save_dir=model_save_dir,
-                 tensorboard_log_dir=tensorboard_log_dir, train_new=True, **args)
+                 tensorboard_log_dir=tensorboard_log_dir, train_new=True, augmented_training=True, **args)
 
 
 def finetune(model, train_data_path, validaton_data_path, model_id, epochs, model_save_dir=None,
-             tensorboard_log_dir=None, **args):
+             tensorboard_log_dir=None, num_freeze_layers=None, **args):
 
     _train_model(model, train_data_path, validaton_data_path, model_id, epochs, model_save_dir=model_save_dir,
-                 tensorboard_log_dir=tensorboard_log_dir, finetune=True, **args)
+                 tensorboard_log_dir=tensorboard_log_dir, finetune=True, num_freeze_layers=num_freeze_layers, **args)
 
 
 def continue_training(model, train_data_path, validaton_data_path, model_id, package, epochs, model_save_dir=None,

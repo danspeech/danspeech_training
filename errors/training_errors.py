@@ -1,4 +1,0 @@
-
-
-class ArgumentMissingForOption(Exception):
-    pass
