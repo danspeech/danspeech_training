@@ -385,7 +385,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             start_iter = 0
 
     except KeyboardInterrupt:
-        print('Exiting training and stopping all processes.')
+        print('Exited training and stopped all processes.')
 
 
 def train_new(model_id, train_data_path, validation_data_path, conv_layers=2, rnn_type='gru', rnn_hidden_layers=5,
