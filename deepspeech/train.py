@@ -107,7 +107,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         conv_layers = conv_layers
         assert rnn_type in ["lstm", "rnn", "gru"], "rnn_type should be either lstm, rnn or gru"
         assert conv_layers in [1, 2, 3], "conv_layers must be set to either 1, 2 or 3"
-
+        print(conv_layers, rnn_hidden_size, rnn_hidden_layers, labels, rnn_type, audio_conf, bidirectional)
         model = DeepSpeech(conv_layers=conv_layers,
                            rnn_hidden_size=rnn_hidden_size,
                            rnn_hidden_layers=rnn_hidden_layers,
