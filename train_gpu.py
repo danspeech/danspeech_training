@@ -1,8 +1,8 @@
-from deepspeech.train import train_new
-import torch
 import os
 import sys
 os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[1]
+import torch
+from deepspeech.train import train_new
 if torch.cuda.is_available():
     print("Success")
     print(torch.cuda.device_count())
