@@ -228,7 +228,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                 # -- distributed sampling, keep epochs on all GPUs
                 train_sampler.set_epoch(epoch)
 
-            print('started training epoch %d', epoch + 1)
+            print('started training epoch %d' % (epoch + 1))
             model.train()
 
             # -- timings per epoch
