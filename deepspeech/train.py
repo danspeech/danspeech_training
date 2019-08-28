@@ -13,7 +13,7 @@ from audio.parsers import SpectrogramAudioParser
 from audio.augmentation import DanSpeechAugmenter
 from danspeech.deepspeech.model import DeepSpeech
 from danspeech.deepspeech.decoder import GreedyDecoder
-from deepspeech.training_utils import TensorBoardLogger, AverageMeter, reduce_tensor, sum_tensor, get_default_audio_config, pretrained_models
+from deepspeech.training_utils import TensorBoardLogger, AverageMeter, reduce_tensor, sum_tensor, get_default_audio_config
 from danspeech.errors.training_errors import ArgumentMissingForOption
 
 
@@ -45,7 +45,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
     # -- prepare directories for storage and logging.
     if not model_save_dir:
-        warnings.warn("You did not specify a directory for saving the trained model."
+        warnings.warn("You did not specify a directory for saving the trained model.\n"
                       "Defaulting to ~/.danspeech/custom/ directory.", NoModelSaveDirSpecified)
 
         model_save_dir = os.path.join(os.path.expanduser('~'), '.danspeech', "custom")
@@ -53,7 +53,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
     os.makedirs(model_save_dir, exist_ok=True)
 
     if not model_id:
-        warnings.warn("You did not specify a name for the trained model."
+        warnings.warn("You did not specify a name for the trained model.\n"
                       "Defaulting to danish_speaking_panda.pth", NoModelNameSpecified)
 
         model_id = "danish_speaking_panda.pth"
@@ -94,7 +94,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
     # -- load and initialize model metrics based on wrapper function
     if train_new:
-        with open('labels.json', "r", encoding="utf-8") as label_file:
+        with open('deepspeech/labels.json', "r", encoding="utf-8") as label_file:
             labels = str(''.join(json.load(label_file)))
 
         # -- changing the default audio config is highly experimental, make changes with care and expect vastly
@@ -102,7 +102,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         audio_conf = get_default_audio_config()
 
         rnn_type = args.rnn_type.lower()
-        conv_layers = args.conv_layers.lower()
+        conv_layers = args.conv_layers
         assert rnn_type in ["lstm", "rnn", "gru"], "rnn_type should be either lstm, rnn or gru"
         assert conv_layers in [1, 2, 3], "conv_layers must be set to either 1, 2 or 3"
 
@@ -388,10 +388,10 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
 
 def train_new(model_id, train_data_path, validation_data_path, model_save_dir=None,
-              tensorboard_log_dir=None, **args):
+              tensorboard_log_dir=None, args=None):
 
     _train_model(model_id, train_data_path, validation_data_path, model_save_dir=model_save_dir,
-                 tensorboard_log_dir=tensorboard_log_dir, train_new=True, augmented_training=True, **args)
+                 tensorboard_log_dir=tensorboard_log_dir, train_new=True, augmented_training=True, args=args)
 
 
 def finetune(model_id, train_data_path, validaton_data_path, epochs, stored_model=None, model_save_dir=None,
