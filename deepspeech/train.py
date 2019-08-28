@@ -5,9 +5,8 @@ import warnings
 import json
 
 import torch
-from torch.nn import CTCLoss
 # -- warpctc bindings for pytorch can be found here: https://github.com/SeanNaren/warp-ctc
-#from warpctc_pytorch import CTCLoss
+from warpctc_pytorch import CTCLoss
 
 from audio.datasets import BatchDataLoader, DanSpeechDataset
 from audio.parsers import SpectrogramAudioParser
