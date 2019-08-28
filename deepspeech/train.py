@@ -220,7 +220,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
     data_time = AverageMeter()
     losses = AverageMeter()
     print(model)
-    print("Initializations complete, starting training pass on model: %s\n" % (model_id + '.pth'))
+    print("Initializations complete, starting training pass on model: %s \n" % model_id)
     print("Number of parameters: %d" % DeepSpeech.get_param_size(model))
     try:
         for epoch in range(start_epoch, epochs):
@@ -228,7 +228,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                 # -- distributed sampling, keep epochs on all GPUs
                 train_sampler.set_epoch(epoch)
 
-            print('started training epoch %s', epoch + 1)
+            print('started training epoch %d', epoch + 1)
             model.train()
 
             # -- timings per epoch
