@@ -162,7 +162,7 @@ def volume_perturb(recording, *args):
 
 def add_wn(recording, *args):
     """
-    Add wn white noise with random variance to recordign
+    Add wn white noise with random variance to recording
 
     :param recording:
     :return: Augmented recording

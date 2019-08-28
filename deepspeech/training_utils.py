@@ -75,6 +75,3 @@ def get_default_audio_config():
         "window_stride": 0.01,
         "window_size": 0.02
     }
-
-
-pretrained_models = ["danspeech_primary", "test_model", "folketinget"]

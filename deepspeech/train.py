@@ -1,12 +1,13 @@
 import os
 import time
-import tqdm
+from tqdm import tqdm
 import warnings
 import json
 
 import torch
+from torch.nn import CTCLoss
 # -- warpctc bindings for pytorch can be found here: https://github.com/SeanNaren/warp-ctc
-from warpctc_pytorch import CTCLoss
+#from warpctc_pytorch import CTCLoss
 
 from audio.datasets import BatchDataLoader, DanSpeechDataset
 from audio.parsers import SpectrogramAudioParser
@@ -25,8 +26,16 @@ class NoLoggingDirSpecified(Warning):
     pass
 
 
-def _train_model(model, train_data_path, validation_data_path, model_id, epochs=20, model_save_dir=None,
-                 tensorboard_log_dir=None, augmented_training=False, batch_size=32,
+class NoModelNameSpecified(Warning):
+    pass
+
+
+class InfiniteLossReturned(Warning):
+    pass
+
+
+def _train_model(model_id=None, train_data_path=None, validation_data_path=None, epochs=20, stored_model=None,
+                 model_save_dir=None, tensorboard_log_dir=None, augmented_training=False, batch_size=32,
                  num_workers=6, cuda=False, lr=3e-4, momentum=0.9, weight_decay=1e-5, max_norm=400,
                  package=None, distributed=False, continue_train=False, finetune=False, train_new=False,
                  num_freeze_layers=None, args=None):
@@ -44,7 +53,16 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
 
     os.makedirs(model_save_dir, exist_ok=True)
 
-    if tensorboard_log_dir:
+    if not model_id:
+        warnings.warn("You did not specify a name for the trained model."
+                      "Defaulting to danish_speaking_panda.pth", NoModelNameSpecified)
+
+        model_id = "danish_speaking_panda.pth"
+
+    assert train_data_path, "please specify path to a valid directory with training data"
+    assert validation_data_path, "please specify path to a valid directory with validation data"
+
+    if main_proc and tensorboard_log_dir:
         logging_process = True
         tensorboard_logger = TensorBoardLogger(model_id, tensorboard_log_dir)
     else:
@@ -70,31 +88,26 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
     cer_results = torch.Tensor(epochs)
     wer_results = torch.Tensor(epochs)
 
-    # -- prepare model for processing
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum,
-                                nesterov=True, weight_decay=weight_decay)
-
     # -- initialize helper variables
     avg_loss = 0
     start_epoch = 0
     start_iter = 0
-
-    # -- initialize DanSpeech augmenter
-    if augmented_training:
-        augmenter = DanSpeechAugmenter(sampling_rate=model.audio_conf["sampling_rate"])
-    else:
-        augmenter = None
 
     # -- load and initialize model metrics based on wrapper function
     if train_new:
         with open('labels.json', "r", encoding="utf-8") as label_file:
             labels = str(''.join(json.load(label_file)))
 
+        # -- changing the default audio config is highly experimental, make changes with care and expect vastly
+        # -- different results compared to baseline
         audio_conf = get_default_audio_config()
 
         rnn_type = args.rnn_type.lower()
+        conv_layers = args.conv_layers.lower()
         assert rnn_type in ["lstm", "rnn", "gru"], "rnn_type should be either lstm, rnn or gru"
-        model = DeepSpeech(conv_layers=args.conv_layers,
+        assert conv_layers in [1, 2, 3], "conv_layers must be set to either 1, 2 or 3"
+
+        model = DeepSpeech(conv_layers=conv_layers,
                            rnn_hidden_size=args.hidden_size,
                            rnn_hidden_layers=args.hidden_layers,
                            labels=labels,
@@ -106,19 +119,16 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
                                     momentum=args.momentum, nesterov=True, weight_decay=1e-5)
 
     if finetune:
-        if not model:
-            raise ArgumentMissingForOption("If you want to finetune, please provide a pretrained model name"
-                                           "or a path to a custom pytorch model object")
+        if not stored_model:
+            raise ArgumentMissingForOption("If you want to finetune, please provide the absolute path"
+                                           "to a trained pytorch model object")
         else:
-            print("Loading checkpoint model %s" % model)
-            if model in pretrained_models:
-                from danspeech.pretrained_models import danspeech_primary
-                model = danspeech_primary()
-            else:
-                package = torch.load(model, map_location=lambda storage, loc: storage)
-                model = DeepSpeech.load_model_package(package)
+            print("Loading checkpoint model %s" % stored_model)
+            package = torch.load(stored_model, map_location=lambda storage, loc: storage)
+            model = DeepSpeech.load_model_package(package)
 
             if num_freeze_layers:
+                # -- freezing layers might result in unexpected results, use with cation
                 model.freeze_layers(num_freeze_layers)
 
             parameters = model.parameters()
@@ -139,7 +149,7 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
             optimizer.load_state_dict(optim_state)
             start_epoch = int(package['epoch']) - 1  # Index start at 0 for training
 
-            print("Previous Epoch: {0}".format(start_epoch))
+            print("Last trained Epoch: {0}".format(start_epoch))
 
             start_epoch += 1
             start_iter = 0
@@ -157,8 +167,17 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
             wer_results[0:previous_epochs] = cer_results_
             cer_results[0:previous_epochs] = wer_results_
 
+            optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum,
+                                        nesterov=True, weight_decay=weight_decay)
+
             if logging_process:
                 tensorboard_logger.load_previous_values(start_epoch, package)
+
+    # -- initialize DanSpeech augmenter
+    if augmented_training:
+        augmenter = DanSpeechAugmenter(sampling_rate=model.audio_conf["sampling_rate"])
+    else:
+        augmenter = None
 
     # -- initialize audio parser and dataset
     # -- audio parsers
@@ -200,8 +219,9 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
-    print("Initializations complete, starting training pass on model:\n")
     print(model)
+    print("Initializations complete, starting training pass on model: %s\n" % (model_id + '.pth'))
+    print("Number of parameters: %d" % DeepSpeech.get_param_size(model))
     try:
         for epoch in range(start_epoch, epochs):
             if distributed and epoch != 0:
@@ -218,7 +238,7 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
 
             # -- per epoch training loop, iterate over all mini-batches in the training set
             for i, (data) in enumerate(train_batch_loader, start=start_iter):
-                if i == len(train_batch_loader):
+                if i == num_updates:
                     break
 
                 # -- grab and prepare a sample for a training pass
@@ -246,7 +266,7 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
                     loss_value = loss.item()
 
                 if loss_value == float("inf") or loss_value == -float("inf"):
-                    print("WARNING: received an inf loss, setting loss value to 0")
+                    warnings.warn("received an inf loss, setting loss value to 0", InfiniteLossReturned)
                     loss_value = 0
 
                 # -- update average loss, and loss tensor
@@ -349,7 +369,7 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
                   'Average WER {wer:.3f}\t'
                   'Average CER {cer:.3f}\t'.format(epoch + 1, wer=avg_wer_epoch, cer=avg_cer_epoch))
 
-            # -- save model if it has the highest recorded performance on validation, or optionally is done training.
+            # -- save model if it has the highest recorded performance on validation.
             if main_proc and (wer < best_wer):
                 model_path = model_save_dir + model_id + '.pth'
                 print("Found better validated model, saving to %s" % model_path)
@@ -365,22 +385,22 @@ def _train_model(model, train_data_path, validation_data_path, model_id, epochs=
             start_iter = 0
 
     except KeyboardInterrupt:
-        # ToDO: added distributed processing
-        print('Implement a DanSpeech exception for early stopping here')
+        print('Exiting training and stopping all processes.')
 
 
-def train_new(model, train_data_path, validation_data_path, model_id, model_save_dir=None,
+def train_new(model_id, train_data_path, validation_data_path, model_save_dir=None,
               tensorboard_log_dir=None, **args):
 
-    _train_model(model, train_data_path, validation_data_path, model_id, model_save_dir=model_save_dir,
+    _train_model(model_id, train_data_path, validation_data_path, model_save_dir=model_save_dir,
                  tensorboard_log_dir=tensorboard_log_dir, train_new=True, augmented_training=True, **args)
 
 
-def finetune(model, train_data_path, validaton_data_path, model_id, epochs, model_save_dir=None,
+def finetune(model_id, train_data_path, validaton_data_path, epochs, stored_model=None, model_save_dir=None,
              tensorboard_log_dir=None, num_freeze_layers=None, **args):
 
-    _train_model(model, train_data_path, validaton_data_path, model_id, epochs, model_save_dir=model_save_dir,
-                 tensorboard_log_dir=tensorboard_log_dir, finetune=True, num_freeze_layers=num_freeze_layers, **args)
+    _train_model(model_id, train_data_path, validaton_data_path, model_id, epochs, stored_model=stored_model,
+                 model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, finetune=True,
+                 num_freeze_layers=num_freeze_layers, **args)
 
 
 def continue_training(model, train_data_path, validaton_data_path, model_id, package, epochs, model_save_dir=None,
