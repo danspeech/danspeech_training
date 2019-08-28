@@ -221,7 +221,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
     losses = AverageMeter()
     print(model)
     print("Initializations complete, starting training pass on model: %s \n" % model_id)
-    print("Number of parameters: %d" % DeepSpeech.get_param_size(model))
+    print("Number of parameters: %d \n" % DeepSpeech.get_param_size(model))
     try:
         for epoch in range(start_epoch, epochs):
             if distributed and epoch != 0:
@@ -370,7 +370,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                   'Average CER {cer:.3f}\t'.format(epoch + 1, wer=avg_wer_epoch, cer=avg_cer_epoch))
 
             # -- save model if it has the highest recorded performance on validation.
-            if main_proc and (wer < best_wer):
+            if main_proc and (best_wer is None) or (best_wer > wer):
                 model_path = model_save_dir + model_id + '.pth'
                 print("Found better validated model, saving to %s" % model_path)
                 torch.save(model.serialize(model, optimizer=optimizer, epoch=epoch, loss_results=loss_results,
