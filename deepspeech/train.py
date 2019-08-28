@@ -11,7 +11,7 @@ from warpctc_pytorch import CTCLoss
 from audio.datasets import BatchDataLoader, DanSpeechDataset
 from audio.parsers import SpectrogramAudioParser
 from audio.augmentation import DanSpeechAugmenter
-from danspeech.deepspeech.model import DeepSpeech
+from danspeech.deepspeech.model import DeepSpeech, supported_rnns
 from danspeech.deepspeech.decoder import GreedyDecoder
 from deepspeech.training_utils import TensorBoardLogger, AverageMeter, reduce_tensor, sum_tensor, get_default_audio_config
 from danspeech.errors.training_errors import ArgumentMissingForOption
@@ -107,12 +107,11 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         conv_layers = conv_layers
         assert rnn_type in ["lstm", "rnn", "gru"], "rnn_type should be either lstm, rnn or gru"
         assert conv_layers in [1, 2, 3], "conv_layers must be set to either 1, 2 or 3"
-        print(conv_layers, rnn_hidden_size, rnn_hidden_layers, labels, rnn_type, audio_conf, bidirectional)
         model = DeepSpeech(conv_layers=conv_layers,
                            rnn_hidden_size=rnn_hidden_size,
                            rnn_hidden_layers=rnn_hidden_layers,
                            labels=labels,
-                           rnn_type=rnn_type,
+                           rnn_type=supported_rnns.get(rnn_type),
                            audio_conf=audio_conf,
                            bidirectional=bidirectional)
         parameters = model.parameters()
