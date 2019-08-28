@@ -50,7 +50,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         warnings.warn("You did not specify a directory for saving the trained model.\n"
                       "Defaulting to ~/.danspeech/custom/ directory.", NoModelSaveDirSpecified)
 
-        model_save_dir = os.path.join(os.path.expanduser('~'), '.danspeech')
+        model_save_dir = os.path.join(os.path.expanduser('~'), '.danspeech/models/')
 
     os.makedirs(model_save_dir, exist_ok=True)
 
