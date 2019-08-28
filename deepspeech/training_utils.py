@@ -1,5 +1,5 @@
 import os
-
+import torch.nn as nn
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 
@@ -75,3 +75,52 @@ def get_default_audio_config():
         "window_stride": 0.01,
         "window_size": 0.02
     }
+
+
+def serialize(model, optimizer=None, epoch=None, iteration=None, loss_results=None,
+              cer_results=None, wer_results=None, avg_loss=None, meta=None, distributed=False):
+
+    supported_rnns = {
+        'lstm': nn.LSTM,
+        'rnn': nn.RNN,
+        'gru': nn.GRU
+    }
+    supported_rnns_inv = dict((v, k) for k, v in supported_rnns.items())
+
+    if distributed:
+        package = {
+            'version': model.module.version,
+            'rnn_hidden_size': model.module.rnn_hidden_size,
+            'rnn_hidden_layers': model.module.rnn_layers,
+            'rnn_type': supported_rnns_inv.get(model.module.rnn_type, model.module.rnn_type.__name__.lower()),
+            'audio_conf': model.module.audio_conf,
+            'labels': model.module.labels,
+            'bidirectional': model.module.bidirectional
+        }
+    else:
+        package = {
+            'version': model.version,
+            'hidden_size': model.hidden_size,
+            'hidden_layers': model.hidden_layers,
+            'rnn_type': supported_rnns_inv.get(model.rnn_type, model.rnn_type.__name__.lower()),
+            'audio_conf': model.audio_conf,
+            'labels': model.labels,
+            'state_dict': model.state_dict(),
+            'bidirectional': model.bidirectional
+        }
+
+    if optimizer is not None:
+        package['optim_dict'] = optimizer.state_dict()
+    if avg_loss is not None:
+        package['avg_loss'] = avg_loss
+    if epoch is not None:
+        package['epoch'] = epoch + 1
+    if iteration is not None:
+        package['iteration'] = iteration
+    if loss_results is not None:
+        package['loss_results'] = loss_results
+        package['cer_results'] = cer_results
+        package['wer_results'] = wer_results
+    if meta is not None:
+        package['meta'] = meta
+    return package

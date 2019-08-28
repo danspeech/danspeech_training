@@ -13,7 +13,7 @@ from audio.parsers import SpectrogramAudioParser
 from audio.augmentation import DanSpeechAugmenter
 from danspeech.deepspeech.model import DeepSpeech, supported_rnns
 from danspeech.deepspeech.decoder import GreedyDecoder
-from deepspeech.training_utils import TensorBoardLogger, AverageMeter, reduce_tensor, sum_tensor, get_default_audio_config
+from deepspeech.training_utils import TensorBoardLogger, AverageMeter, reduce_tensor, sum_tensor, get_default_audio_config, serialize
 from danspeech.errors.training_errors import ArgumentMissingForOption
 
 
@@ -50,7 +50,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         warnings.warn("You did not specify a directory for saving the trained model.\n"
                       "Defaulting to ~/.danspeech/custom/ directory.", NoModelSaveDirSpecified)
 
-        model_save_dir = os.path.join(os.path.expanduser('~'), '.danspeech', "custom")
+        model_save_dir = os.path.join(os.path.expanduser('~'), '.danspeech')
 
     os.makedirs(model_save_dir, exist_ok=True)
 
@@ -58,7 +58,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         warnings.warn("You did not specify a name for the trained model.\n"
                       "Defaulting to danish_speaking_panda.pth", NoModelNameSpecified)
 
-        model_id = "danish_speaking_panda.pth"
+        model_id = "danish_speaking_panda"
 
     assert train_data_path, "please specify path to a valid directory with training data"
     assert validation_data_path, "please specify path to a valid directory with validation data"
@@ -373,9 +373,9 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             if main_proc and (best_wer is None) or (best_wer > wer):
                 model_path = model_save_dir + model_id + '.pth'
                 print("Found better validated model, saving to %s" % model_path)
-                torch.save(model.serialize(model, optimizer=optimizer, epoch=epoch, loss_results=loss_results,
-                                           wer_results=wer_results, cer_results=cer_results,
-                                           distributed=distributed)
+                torch.save(serialize(model, optimizer=optimizer, epoch=epoch, loss_results=loss_results,
+                                     wer_results=wer_results, cer_results=cer_results,
+                                     distributed=distributed)
                            , model_path)
 
                 best_wer = wer
