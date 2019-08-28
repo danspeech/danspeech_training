@@ -36,8 +36,10 @@ class InfiniteLossReturned(Warning):
 def _train_model(model_id=None, train_data_path=None, validation_data_path=None, epochs=20, stored_model=None,
                  model_save_dir=None, tensorboard_log_dir=None, augmented_training=False, batch_size=32,
                  num_workers=6, cuda=False, lr=3e-4, momentum=0.9, weight_decay=1e-5, max_norm=400,
-                 package=None, distributed=False, continue_train=False, finetune=False, train_new=False,
-                 num_freeze_layers=None, args=None):
+                 package=None, continue_train=False, finetune=False, train_new=False,
+                 num_freeze_layers=None, rnn_type='gru', conv_layers=2, rnn_hidden_layers=5, rnn_hidden_size=800,
+                 bidirectional=True, distributed=False, gpu_rank=None, dist_backend='nccl', rank=0,
+                 dist_url='tcp://127.0.0.1:1550', world_size=1):
 
     # -- set training device
     main_proc = True
@@ -76,11 +78,11 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         from torch.utils.data.distributed import DistributedSampler
         from apex.parallel import DistributedDataParallel
 
-        if args.gpu_rank:
-            torch.cuda.set_device(int(args.gpu_rank))
+        if gpu_rank:
+            torch.cuda.set_device(int(gpu_rank))
 
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
+        dist.init_process_group(backend=dist_backend, init_method=dist_url,
+                                world_size=world_size, rank=rank)
 
     # -- initialize training metrics
     loss_results = torch.Tensor(epochs)
@@ -101,21 +103,21 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         # -- different results compared to baseline
         audio_conf = get_default_audio_config()
 
-        rnn_type = args.rnn_type.lower()
-        conv_layers = args.conv_layers
+        rnn_type = rnn_type.lower()
+        conv_layers = conv_layers
         assert rnn_type in ["lstm", "rnn", "gru"], "rnn_type should be either lstm, rnn or gru"
         assert conv_layers in [1, 2, 3], "conv_layers must be set to either 1, 2 or 3"
 
         model = DeepSpeech(conv_layers=conv_layers,
-                           rnn_hidden_size=args.hidden_size,
-                           rnn_hidden_layers=args.hidden_layers,
+                           rnn_hidden_size=rnn_hidden_size,
+                           rnn_hidden_layers=rnn_hidden_layers,
                            labels=labels,
                            rnn_type=rnn_type,
                            audio_conf=audio_conf,
-                           bidirectional=args.bidirectional)
+                           bidirectional=bidirectional)
         parameters = model.parameters()
-        optimizer = torch.optim.SGD(parameters, lr=args.lr,
-                                    momentum=args.momentum, nesterov=True, weight_decay=1e-5)
+        optimizer = torch.optim.SGD(parameters, lr=lr,
+                                    momentum=momentum, nesterov=True, weight_decay=1e-5)
 
     if finetune:
         if not stored_model:
@@ -131,8 +133,8 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                 model.freeze_layers(num_freeze_layers)
 
             parameters = model.parameters()
-            optimizer = torch.optim.SGD(parameters, lr=args.lr,
-                                        momentum=args.momentum, nesterov=True, weight_decay=1e-5)
+            optimizer = torch.optim.SGD(parameters, lr=lr,
+                                        momentum=momentum, nesterov=True, weight_decay=1e-5)
 
             if logging_process:
                 tensorboard_logger.load_previous_values(start_epoch, package)
@@ -196,15 +198,15 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                                                   shuffle=False)
     else:
         # -- initialize batch loaders for distributed training on multiple GPUs
-        train_sampler = DistributedSampler(training_set, num_replicas=args.world_size, rank=args.rank)
-        train_batch_loader = BatchDataLoader(training_set, batch_size=args.batch_size,
-                                             num_workers=args.num_workers,
+        train_sampler = DistributedSampler(training_set, num_replicas=world_size, rank=rank)
+        train_batch_loader = BatchDataLoader(training_set, batch_size=batch_size,
+                                             num_workers=num_workers,
                                              sampler=train_sampler,
                                              pin_memory=True)
 
-        validation_sampler = DistributedSampler(validation_set, num_replicas=args.world_size, rank=args.rank)
-        validation_batch_loader = BatchDataLoader(validation_set, batch_size=args.batch_size,
-                                                  num_workers=args.num_workers,
+        validation_sampler = DistributedSampler(validation_set, num_replicas=world_size, rank=rank)
+        validation_batch_loader = BatchDataLoader(validation_set, batch_size=batch_size,
+                                                  num_workers=num_workers,
                                                   sampler=validation_sampler)
 
         model = DistributedDataParallel(model)
@@ -260,7 +262,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
                 # -- check for diverging losses
                 if distributed:
-                    loss_value = reduce_tensor(loss, args.world_size).item()
+                    loss_value = reduce_tensor(loss, world_size).item()
                 else:
                     loss_value = loss.item()
 
@@ -387,11 +389,13 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         print('Exiting training and stopping all processes.')
 
 
-def train_new(model_id, train_data_path, validation_data_path, model_save_dir=None,
-              tensorboard_log_dir=None, args=None):
+def train_new(model_id, train_data_path, validation_data_path, conv_layers=2, rnn_type='gru', rnn_hidden_layers=5,
+              rnn_hidden_size=800, bidirectional=True, model_save_dir=None, tensorboard_log_dir=None, **args):
 
-    _train_model(model_id, train_data_path, validation_data_path, model_save_dir=model_save_dir,
-                 tensorboard_log_dir=tensorboard_log_dir, train_new=True, augmented_training=True, args=args)
+    _train_model(model_id, train_data_path, validation_data_path, conv_layers=conv_layers, rnn_type=rnn_type,
+                 rnn_hidden_layers=rnn_hidden_layers, rnn_hidden_size=rnn_hidden_size, bidirectional=bidirectional,
+                 model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, train_new=True,
+                 augmented_training=True, **args)
 
 
 def finetune(model_id, train_data_path, validaton_data_path, epochs, stored_model=None, model_save_dir=None,
