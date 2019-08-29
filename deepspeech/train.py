@@ -151,9 +151,11 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             package = torch.load(stored_model, map_location=lambda storage, loc: storage)
             model = DeepSpeech.load_model_package(package)
             # -- load stored training information
+            optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum,
+                                        nesterov=True, weight_decay=weight_decay)
             optim_state = package['optim_dict']
             optimizer.load_state_dict(optim_state)
-            start_epoch = int(package['epoch']) - 1  # Index start at 0 for training
+            start_epoch = int(package['epoch']) - 1  # -- Index start at 0 for training
 
             print("Last trained Epoch: {0}".format(start_epoch))
 
@@ -172,9 +174,6 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             loss_results[0:previous_epochs] = loss_results_
             wer_results[0:previous_epochs] = cer_results_
             cer_results[0:previous_epochs] = wer_results_
-
-            optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum,
-                                        nesterov=True, weight_decay=weight_decay)
 
             if logging_process:
                 tensorboard_logger.load_previous_values(start_epoch, package)
