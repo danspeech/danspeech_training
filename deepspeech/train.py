@@ -157,7 +157,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             optimizer.load_state_dict(optim_state)
             start_epoch = int(package['epoch']) + 1  # -- Index start at 0 for training
 
-            print("Last trained Epoch: {0}".format(start_epoch))
+            print("Last successfully trained Epoch: {0}".format(start_epoch))
 
             start_epoch += 1
             start_iter = 0
@@ -169,7 +169,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
             # ToDo: Make depend on the epoch from the package
             previous_epochs = loss_results_.size()[0]
-            print("Previously ran: {0} epochs".format(previous_epochs))
+            print("Previously set to run for: {0} epochs".format(previous_epochs))
 
             loss_results[0:previous_epochs] = loss_results_
             wer_results[0:previous_epochs] = cer_results_
