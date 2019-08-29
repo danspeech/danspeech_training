@@ -36,7 +36,7 @@ class InfiniteLossReturned(Warning):
 def _train_model(model_id=None, train_data_path=None, validation_data_path=None, epochs=20, stored_model=None,
                  model_save_dir=None, tensorboard_log_dir=None, augmented_training=False, batch_size=32,
                  num_workers=6, cuda=False, lr=3e-4, momentum=0.9, weight_decay=1e-5, max_norm=400,
-                 package=None, continue_train=False, finetune=False, train_new=False,
+                 context=20, package=None, continue_train=False, finetune=False, train_new=False,
                  num_freeze_layers=None, rnn_type='gru', conv_layers=2, rnn_hidden_layers=5, rnn_hidden_size=800,
                  bidirectional=True, distributed=False, gpu_rank=None, dist_backend='nccl', rank=0,
                  dist_url='tcp://127.0.0.1:1550', world_size=1):
@@ -107,13 +107,16 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         conv_layers = conv_layers
         assert rnn_type in ["lstm", "rnn", "gru"], "rnn_type should be either lstm, rnn or gru"
         assert conv_layers in [1, 2, 3], "conv_layers must be set to either 1, 2 or 3"
-        model = DeepSpeech(conv_layers=conv_layers,
+        model = DeepSpeech(model_name=model_id,
+                           conv_layers=conv_layers,
                            rnn_hidden_size=rnn_hidden_size,
-                           rnn_hidden_layers=rnn_hidden_layers,
+                           rnn_layers=rnn_hidden_layers,
                            labels=labels,
                            rnn_type=supported_rnns.get(rnn_type),
                            audio_conf=audio_conf,
-                           bidirectional=bidirectional)
+                           bidirectional=bidirectional,
+                           streaming_model=False,  # -- streaming inference should always be disabled during training
+                           context=context)
         parameters = model.parameters()
         optimizer = torch.optim.SGD(parameters, lr=lr,
                                     momentum=momentum, nesterov=True, weight_decay=1e-5)
@@ -144,6 +147,9 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             raise ArgumentMissingForOption("If you want to continue training, please support a package with previous"
                                            "training information or use the finetune option instead")
         else:
+            print("Loading checkpoint model %s" % stored_model)
+            package = torch.load(stored_model, map_location=lambda storage, loc: storage)
+            model = DeepSpeech.load_model_package(package)
             # -- load stored training information
             optim_state = package['optim_dict']
             optimizer.load_state_dict(optim_state)
@@ -372,10 +378,17 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             # -- save model if it has the highest recorded performance on validation.
             if main_proc and (best_wer is None) or (best_wer > wer):
                 model_path = model_save_dir + model_id + '.pth'
+
+                # -- check if the model is uni or bidirectional, and set streaming model accordingly
+                if not bidirectional:
+                    streaming_inference_model = True
+                else:
+                    streaming_inference_model = False
                 print("Found better validated model, saving to %s" % model_path)
                 torch.save(serialize(model, optimizer=optimizer, epoch=epoch, loss_results=loss_results,
                                      wer_results=wer_results, cer_results=cer_results,
-                                     distributed=distributed)
+                                     distributed=distributed, streaming_model=streaming_inference_model,
+                                     context=context)
                            , model_path)
 
                 best_wer = wer
@@ -385,7 +398,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             start_iter = 0
 
     except KeyboardInterrupt:
-        print('Exited training and stopped all processes.')
+        print('Successfully exited training and stopped all processes.')
 
 
 def train_new(model_id, train_data_path, validation_data_path, conv_layers=2, rnn_type='gru', rnn_hidden_layers=5,

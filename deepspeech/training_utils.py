@@ -78,7 +78,8 @@ def get_default_audio_config():
 
 
 def serialize(model, optimizer=None, epoch=None, iteration=None, loss_results=None,
-              cer_results=None, wer_results=None, avg_loss=None, meta=None, distributed=False):
+              cer_results=None, wer_results=None, avg_loss=None, meta=None, distributed=False,
+              streaming_model=None, context=None):
 
     supported_rnns = {
         'lstm': nn.LSTM,
@@ -95,7 +96,7 @@ def serialize(model, optimizer=None, epoch=None, iteration=None, loss_results=No
             'rnn_type': supported_rnns_inv.get(model.module.rnn_type, model.module.rnn_type.__name__.lower()),
             'audio_conf': model.module.audio_conf,
             'labels': model.module.labels,
-            'bidirectional': model.module.bidirectional
+            'bidirectional': model.module.bidirectional,
         }
     else:
         package = {
@@ -123,4 +124,8 @@ def serialize(model, optimizer=None, epoch=None, iteration=None, loss_results=No
         package['wer_results'] = wer_results
     if meta is not None:
         package['meta'] = meta
+    if streaming_model is not None:
+        package['streaming_model'] = streaming_model
+    if context is not None:
+        package['context'] = context
     return package
