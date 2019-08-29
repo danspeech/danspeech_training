@@ -91,6 +91,7 @@ def serialize(model, optimizer=None, epoch=None, iteration=None, loss_results=No
     if distributed:
         package = {
             'model_name': model.module.model_name,
+            'conv_layers': model.module.conv_layers,
             'rnn_hidden_size': model.module.rnn_hidden_size,
             'rnn_layers': model.module.rnn_layers,
             'rnn_type': supported_rnns_inv.get(model.module.rnn_type, model.module.rnn_type.__name__.lower()),
@@ -101,6 +102,7 @@ def serialize(model, optimizer=None, epoch=None, iteration=None, loss_results=No
     else:
         package = {
             'model_name': model.model_name,
+            'conv_layers': model.conv_layers,
             'rnn_hidden_size': model.rnn_hidden_size,
             'rnn_layers': model.rnn_layers,
             'rnn_type': supported_rnns_inv.get(model.rnn_type, model.rnn_type.__name__.lower()),
