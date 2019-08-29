@@ -155,7 +155,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                                         nesterov=True, weight_decay=weight_decay)
             optim_state = package['optim_dict']
             optimizer.load_state_dict(optim_state)
-            start_epoch = int(package['epoch']) - 1  # -- Index start at 0 for training
+            start_epoch = int(package['epoch']) + 1  # -- Index start at 0 for training
 
             print("Last trained Epoch: {0}".format(start_epoch))
 
