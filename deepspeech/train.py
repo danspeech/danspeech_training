@@ -402,25 +402,25 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
 
 def train_new(model_id, train_data_path, validation_data_path, conv_layers=2, rnn_type='gru', rnn_hidden_layers=5,
-              rnn_hidden_size=800, bidirectional=True, model_save_dir=None, tensorboard_log_dir=None, **args):
+              rnn_hidden_size=800, bidirectional=True, epochs=20, model_save_dir=None,
+              tensorboard_log_dir=None, **args):
 
     _train_model(model_id, train_data_path, validation_data_path, conv_layers=conv_layers, rnn_type=rnn_type,
                  rnn_hidden_layers=rnn_hidden_layers, rnn_hidden_size=rnn_hidden_size, bidirectional=bidirectional,
                  model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, train_new=True,
-                 augmented_training=True, **args)
+                 epochs=epochs, augmented_training=True, **args)
 
 
-def finetune(model_id, train_data_path, validaton_data_path, epochs, stored_model=None, model_save_dir=None,
+def finetune(model_id, train_data_path, validation_data_path, stored_model=None, model_save_dir=None,
              tensorboard_log_dir=None, num_freeze_layers=None, **args):
 
-    _train_model(model_id, train_data_path, validaton_data_path, model_id, epochs, stored_model=stored_model,
+    _train_model(model_id, train_data_path, validation_data_path, model_id, stored_model=stored_model,
                  model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, finetune=True,
                  num_freeze_layers=num_freeze_layers, **args)
 
 
-def continue_training(model, train_data_path, validaton_data_path, model_id, package, epochs, model_save_dir=None,
+def continue_training(model_id, train_data_path, validation_data_path, model_save_dir=None,
                       tensorboard_log_dir=None, **args):
 
-    _train_model(model, train_data_path, validaton_data_path, model_id, epochs, model_save_dir=model_save_dir,
-                 tensorboard_log_dir=tensorboard_log_dir, continue_train=True, augmented_training=True,
-                 package=package, **args)
+    _train_model(model, train_data_path, validation_data_path, model_id, model_save_dir=model_save_dir,
+                 tensorboard_log_dir=tensorboard_log_dir, continue_train=True, augmented_training=True, **args)
