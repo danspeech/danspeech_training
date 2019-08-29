@@ -124,7 +124,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
     if finetune:
         if not stored_model:
             raise ArgumentMissingForOption("If you want to finetune, please provide the absolute path"
-                                           "to a trained pytorch model object")
+                                           "to a trained pytorch model object as the stored_model argument")
         else:
             print("Loading checkpoint model %s" % stored_model)
             package = torch.load(stored_model, map_location=lambda storage, loc: storage)
