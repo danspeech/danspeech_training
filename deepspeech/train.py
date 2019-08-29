@@ -96,7 +96,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
     # -- load and initialize model metrics based on wrapper function
     if train_new:
-        with open('deepspeech/labels.json', "r", encoding="utf-8") as label_file:
+        with open(os.path.dirname(os.path.realpath(__file__)) + '/labels.json', "r", encoding="utf-8") as label_file:
             labels = str(''.join(json.load(label_file)))
 
         # -- changing the default audio config is highly experimental, make changes with care and expect vastly
