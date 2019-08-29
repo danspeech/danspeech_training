@@ -90,9 +90,9 @@ def serialize(model, optimizer=None, epoch=None, iteration=None, loss_results=No
 
     if distributed:
         package = {
-            'version': model.module.version,
+            'model_name': model.module.model_name,
             'rnn_hidden_size': model.module.rnn_hidden_size,
-            'rnn_hidden_layers': model.module.rnn_layers,
+            'rnn_layers': model.module.rnn_layers,
             'rnn_type': supported_rnns_inv.get(model.module.rnn_type, model.module.rnn_type.__name__.lower()),
             'audio_conf': model.module.audio_conf,
             'labels': model.module.labels,
@@ -100,9 +100,9 @@ def serialize(model, optimizer=None, epoch=None, iteration=None, loss_results=No
         }
     else:
         package = {
-            'version': model.version,
-            'hidden_size': model.hidden_size,
-            'hidden_layers': model.hidden_layers,
+            'model_name': model.model_name,
+            'rnn_hidden_size': model.rnn_hidden_size,
+            'rnn_layers': model.rnn_layers,
             'rnn_type': supported_rnns_inv.get(model.rnn_type, model.rnn_type.__name__.lower()),
             'audio_conf': model.audio_conf,
             'labels': model.labels,
