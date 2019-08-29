@@ -36,8 +36,8 @@ class InfiniteLossReturned(Warning):
 def _train_model(model_id=None, train_data_path=None, validation_data_path=None, epochs=20, stored_model=None,
                  model_save_dir=None, tensorboard_log_dir=None, augmented_training=False, batch_size=32,
                  num_workers=6, cuda=False, lr=3e-4, momentum=0.9, weight_decay=1e-5, max_norm=400,
-                 context=20, package=None, continue_train=False, finetune=False, train_new=False,
-                 num_freeze_layers=None, rnn_type='gru', conv_layers=2, rnn_hidden_layers=5, rnn_hidden_size=800,
+                 context=20, continue_train=False, finetune=False, train_new=False, num_freeze_layers=None,
+                 rnn_type='gru', conv_layers=2, rnn_hidden_layers=5, rnn_hidden_size=800,
                  bidirectional=True, distributed=False, gpu_rank=None, dist_backend='nccl', rank=0,
                  dist_url='tcp://127.0.0.1:1550', world_size=1):
 
@@ -143,7 +143,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
     if continue_train:
         # -- continue_training wrapper
-        if not package:
+        if not stored_model:
             raise ArgumentMissingForOption("If you want to continue training, please support a package with previous"
                                            "training information or use the finetune option instead")
         else:
@@ -419,8 +419,9 @@ def finetune(model_id, train_data_path, validation_data_path, epochs=20, stored_
                  num_freeze_layers=num_freeze_layers, **args)
 
 
-def continue_training(model_id, train_data_path, validation_data_path, epochs=20, model_save_dir=None,
-                      tensorboard_log_dir=None, **args):
+def continue_training(model_id, train_data_path, validation_data_path, epochs=20, stored_model=None,
+                      model_save_dir=None, tensorboard_log_dir=None, **args):
 
-    _train_model(model_id, train_data_path, validation_data_path, epochs=epochs, model_save_dir=model_save_dir,
-                 tensorboard_log_dir=tensorboard_log_dir, continue_train=True, augmented_training=True, **args)
+    _train_model(model_id, train_data_path, validation_data_path, epochs=epochs, stored_model=stored_model,
+                 model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, continue_train=True,
+                 augmented_training=True, **args)
