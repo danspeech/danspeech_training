@@ -411,16 +411,16 @@ def train_new(model_id, train_data_path, validation_data_path, conv_layers=2, rn
                  epochs=epochs, augmented_training=True, **args)
 
 
-def finetune(model_id, train_data_path, validation_data_path, stored_model=None, model_save_dir=None,
+def finetune(model_id, train_data_path, validation_data_path, epochs=20, stored_model=None, model_save_dir=None,
              tensorboard_log_dir=None, num_freeze_layers=None, **args):
 
-    _train_model(model_id, train_data_path, validation_data_path, model_id, stored_model=stored_model,
+    _train_model(model_id, train_data_path, validation_data_path, epochs=epochs, stored_model=stored_model,
                  model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, finetune=True,
                  num_freeze_layers=num_freeze_layers, **args)
 
 
-def continue_training(model_id, train_data_path, validation_data_path, model_save_dir=None,
+def continue_training(model_id, train_data_path, validation_data_path, epochs=20, model_save_dir=None,
                       tensorboard_log_dir=None, **args):
 
-    _train_model(model, train_data_path, validation_data_path, model_id, model_save_dir=model_save_dir,
+    _train_model(model_id, train_data_path, validation_data_path, epochs=epochs, model_save_dir=model_save_dir,
                  tensorboard_log_dir=tensorboard_log_dir, continue_train=True, augmented_training=True, **args)
