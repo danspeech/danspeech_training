@@ -115,7 +115,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                            rnn_type=supported_rnns.get(rnn_type),
                            audio_conf=audio_conf,
                            bidirectional=bidirectional,
-                           streaming_model=False,  # -- streaming inference should always be disabled during training
+                           streaming_inference_model=False,  # -- streaming inference should always be disabled during training
                            context=context)
         parameters = model.parameters()
         optimizer = torch.optim.SGD(parameters, lr=lr,
