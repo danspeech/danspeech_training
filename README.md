@@ -1,5 +1,5 @@
-## DanSpeech Training add-on
-# Repository structure
+# DanSpeech Training add-on
+## Repository structure
 DanSpeech training is an add-on repository to the DanSpeech package. It was developed to help development cycles.
 
 DanSpeech training supports three train wrapper functions all found in the deepspeech.train file. 
@@ -15,7 +15,7 @@ All training and testing requires a specific file structure.
 1. All audio files associated with a particular task must be placed inside a folder (e.g. /home/usr/project_folder/train/ for training associated files).
 2. Each task associated folder must include exactly one .csv file, each row in the .csv file is expected to point to exactly one audio file and contain all relevant information associated with the file it points to (e.g. /home/usr/project_folder/train/overview.csv).
 
-# And example of a csv file could be:
+## And example of a csv file could be:
 
 row 0: file, transcription, gender, age
 
@@ -27,7 +27,7 @@ row 2: filenmae1.wav, koalaer er søde jeg ville ønske de kunne snakke dansk, k
 
 row n: filenamen.wav, pindsvin er flotte jeg ville ønske de ikke stak så meget, mand, 88
 
-# Example use-cases:
+## Example use-cases:
 training with a CPU: 
 ```python
 from deepspeech.train import train_new
