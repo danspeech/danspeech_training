@@ -8,13 +8,17 @@ if torch.cuda.is_available():
     print(torch.cuda.device_count())
 
 if __name__ == '__main__':
+    # -- example code for training a new model
     train_new(model_id=None, train_data_path='/scratch/s134843/danspeech/', validation_data_path='/scratch/s134843/danspeech/', cuda=True)
+
+    # -- example code for continuation of a new model
     # continue_training(model_id='danish_speaking_panda_finetuned_continued',
     #                   train_data_path='/scratch/s134843/danspeech/',
     #                   validation_data_path='/scratch/s134843/danspeech/',
     #                   stored_model = '/home/s123106/.danspeech/models/danish_speaking_panda_finetuned.pth',
     #                   cuda=True)
 
+    # -- example code of finetuning a model
     # finetune(model_id='danish_speaking_panda_finetuned',
     #          train_data_path='/scratch/s134843/danspeech/',
     #          validation_data_path='/scratch/s134843/danspeech',
