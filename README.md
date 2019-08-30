@@ -16,10 +16,15 @@ All training and testing requires a specific file structure.
 2. Each task associated folder must include exactly one .csv file, each row in the .csv file is expected to point to exactly one audio file and contain all relevant information associated with the file it points to (e.g. /home/usr/project_folder/train/overview.csv).
 
 # And example of a csv file could be:
+
 row 0: file, transcription, gender, age
+
 row 1: filename.wav, pandaer er et fantastisk dyr jeg ville ønske de kunne snakke dansk, mand, 34
+
 row 2: filenmae1.wav, koalaer er søde jeg ville ønske de kunne snakke dansk, kvinde, 22
+
 ...
+
 row n: filenamen.wav, pindsvin er flotte jeg ville ønske de ikke stak så meget, mand, 88
 
 # Example use-cases:
