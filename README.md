@@ -1,4 +1,17 @@
 # DanSpeech Training add-on
+## Authors and acknowledgment
+Main authors: 
+* Martin Carsten Nielsen  ([mcnielsen4270@gmail.com](mcnielsen4270@gmail.com))
+* Rasmus Arpe Fogh Jensen ([rasmus.arpe@gmail.com](rasmus.arpe@gmail.com))
+
+This project is supported by Innovation Foundation Denmark through the projects DABAI and ATEL
+
+Other acknowledgements:
+
+* We've trained the models based on the code from [https://github.com/SeanNaren/deepspeech.pytorch](https://github.com/SeanNaren/deepspeech.pytorch).
+* The audio handling and recognizing flow is based on [https://github.com/Uberi/speech_recognition](https://github.com/Uberi/speech_recognition).
+* Handling of the pretrained models is based on [keras](https://github.com/keras-team/keras).
+* We've trained all models with the aid of DTU using data from Sprakbanken ([NST](https://www.nb.no/sprakbanken/show?serial=oai%3Anb.no%3Asbr-19&lang=en)).
 ## Repository structure
 DanSpeech training is an add-on repository to the DanSpeech package. It was developed to help development cycles.
 
