@@ -25,48 +25,45 @@ class DanSpeechAugmenter(DataAugmenter):
     def __init__(self, sampling_rate, augmentation_list=None):
         self.sampling_rate = sampling_rate
 
-        # Allow user to specify a list of ordered augmentations
+        # Allow user to specify a list of augmentations
+        # otherwise default to danspeech schema.
         if not augmentation_list:
-            # Ordered list of augmentation policies
-            self.augmentations_list = [speed_perturb, room_reverb, volume_perturb, add_wn, shift_perturb]
+            self.augmentations_list = [
+                speed_perturb,
+                room_reverb,
+                volume_perturb,
+                add_wn,
+                shift_perturb
+            ]
 
     def augment(self, recording):
+        scheme = self.choose_augmentation_scheme(self.augmentions_list)
 
-        # toDo: Make augment probability depend on length of the augmentation list
-        augment_gate = random.uniform(0, 1)
-
-        # there are 30 possible unique permutations of the augmentation list, so we choose a random augmentation
-        # with chances 1-1/30.
-        if augment_gate < 0.96666666666:
-            scheme = self.choose_augmentation_scheme()
-            # Apply the chosen augmentations
-            for augmentation_function in scheme:
-                recording = augmentation_function(recording, self.sampling_rate)
+        if len(scheme) > 0:
+            for augmentation in scheme:
+                augmentor = getattr(self, augmentation)
+                recording = augmentor(recording)
 
         return recording
 
     def choose_augmentation_scheme(self):
         """
-        Chooses a valid danspeech augmentation based on the ordered list of augmentations
+        Chooses a valid danspeech augmentation based on the ordered
+        list of augmentations
 
         :param list_of_augmentations: Ordered list of augmentation functions
         :return: A valid danspeech augmentation scheme
         """
-        augmentations_to_apply = []
-        # pick a random number between 0 and len(list), the number must be picked uniformly and is the index of
-        # the first augmentation to run.
-        index_zero = random.randint(0, len(self.augmentations_list) - 1)
-        augmentations_to_apply.append(self.augmentations_list[index_zero])
+        n_augments = random.randint(0, len(self.augmentations_list))
+        augmentations_to_apply = random.sample(
+            self.augmentations_list, n_augments)
 
-        # "slice" the list index_zero and select a random number of additional augmentations to be applied in range
-        # {0;len(slice)}.
-        num_augmentations = random.randint(0, len(self.augmentations_list[index_zero:]) - 1)
-        index_infected = random.sample(range(index_zero + 1, len(self.augmentations_list)), num_augmentations)
-        index_infected.sort()
-        for index in index_infected:
-            augmentations_to_apply.append(self.augmentations_list[index])
+        augmentation_scheme = []
+        for augmentation in self.augmentations_list:
+            if augmentation in augmentations_to_apply:
+                augmentation_scheme.append(augmentation)
 
-        return augmentations_to_apply
+        return augmentation_scheme
 
 
 def speed_perturb(recording, sampling_rate, *args):

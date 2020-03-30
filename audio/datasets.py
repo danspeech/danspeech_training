@@ -30,7 +30,8 @@ class DanSpeechDataset(Dataset):
         # Init csv file
         # Should only be single file with file,trans
         csv_files = [f for f in os.listdir(self.root_dir) if ".csv" in f]
-        assert len(csv_files) == 1, "Multiple csv files present in specified data directory"
+        assert len(
+            csv_files) == 1, "Multiple csv files present in specified data directory"
         csv_file = csv_files[0]
 
         # ToDO: Should not rely on pandas
@@ -108,27 +109,3 @@ class BatchDataLoader(DataLoader):
         """
         super(BatchDataLoader, self).__init__(dataset, *args, **kwargs)
         self.collate_fn = _collate_fn
-
-
-# ToDO: Remove when done testing
-if __name__ == '__main__':
-    from danspeech.audio.augmentation import DanSpeechAugmenter
-    from danspeech.pretrained_models import Units400
-    from danspeech.audio.parsers import SpectrogramAudioParser
-
-    model = Units400()
-    augmenter = DanSpeechAugmenter(model.audio_conf["sampling_rate"])
-    parser = SpectrogramAudioParser(audio_config=model.audio_conf,
-                                    data_augmenter=augmenter)
-
-    dataset = DanSpeechDataset(root_dir="/Volumes/Karens harddisk/NST/preprocessed_test",
-                               labels=model.labels,
-                               audio_parser=parser)
-
-    import matplotlib.pyplot as plt
-
-    for i in range(10):
-        spec, trans = dataset[i]
-        plt.imshow(spec)
-        plt.show()
-        print(trans)
