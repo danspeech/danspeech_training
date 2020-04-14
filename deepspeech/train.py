@@ -425,4 +425,4 @@ def continue_training(model_id, train_data_path, validation_data_path, epochs=20
 
     _train_model(model_id, train_data_path, validation_data_path, epochs=epochs, stored_model=stored_model,
                  model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, continue_train=True,
-                 augmented_training=False, **args)
+                 augmented_training=True, **args)
