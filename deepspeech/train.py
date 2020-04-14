@@ -117,6 +117,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                            bidirectional=bidirectional,
                            streaming_inference_model=False,  # -- streaming inference should always be disabled during training
                            context=context)
+        model = model.to(device)
         parameters = model.parameters()
         optimizer = torch.optim.SGD(parameters, lr=lr,
                                     momentum=momentum, nesterov=True, weight_decay=1e-5)
@@ -129,6 +130,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             print("Loading checkpoint model %s" % stored_model)
             package = torch.load(stored_model, map_location=lambda storage, loc: storage)
             model = DeepSpeech.load_model_package(package)
+            model = model.to(device)
 
             if num_freeze_layers:
                 # -- freezing layers might result in unexpected results, use with cation
@@ -150,6 +152,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             print("Loading checkpoint model %s" % stored_model)
             package = torch.load(stored_model, map_location=lambda storage, loc: storage)
             model = DeepSpeech.load_model_package(package)
+            model = model.to(device)
             # -- load stored training information
             optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum,
                                         nesterov=True, weight_decay=weight_decay)
@@ -217,7 +220,6 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
     decoder = GreedyDecoder(model.labels)
     criterion = CTCLoss()
-    model = model.to(device)
     best_wer = None
 
     # -- verbatim training outputs during progress
