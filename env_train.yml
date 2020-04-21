@@ -75,5 +75,4 @@ dependencies:
     - warpctc-pytorch==0.1
     - werkzeug==1.0.1
     - wget==3.2
-prefix: /home/user/.conda/envs/training
 

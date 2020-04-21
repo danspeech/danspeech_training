@@ -16,7 +16,7 @@ All training and testing requires a specific file structure.
 2. Each task associated folder must include exactly one .csv file, each row in the .csv file is expected to point to exactly one audio file and contain all relevant information associated with the file it points to (e.g. /home/usr/project_folder/train/overview.csv).
 
 ## Installation
-To run the training code, follow the steps below.
+To run the training code, follow the steps below. We suggest using a virtual environment.
 
 1. Install [danspeech](https://github.com/danspeech/danspeech) (consider using pytorch 1.1.0 here)
 2. Install wget through pip 
