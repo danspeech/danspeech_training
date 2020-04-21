@@ -15,6 +15,21 @@ All training and testing requires a specific file structure.
 1. All audio files associated with a particular task must be placed inside a folder (e.g. /home/usr/project_folder/train/ for training associated files).
 2. Each task associated folder must include exactly one .csv file, each row in the .csv file is expected to point to exactly one audio file and contain all relevant information associated with the file it points to (e.g. /home/usr/project_folder/train/overview.csv).
 
+## Installation
+To run the training code, follow the steps below. We suggest using a virtual environment.
+
+1. Install [danspeech](https://github.com/danspeech/danspeech) (consider using pytorch 1.1.0 here)
+2. Install wget through pip 
+3. Install [python bindings for warp-ctc](https://github.com/SeanNaren/warp-ctc)
+
+The training repo has quite a lot of dependencies, hence this repo includes the `env_train.yml` file with
+versions for all dependencies in a working virtual conda environment. If you have trouble, look at the file for the 
+specific versions or try to install a virtual conda environment with:
+
+```conda env create -f env_train.yml ```
+
+Python bindings for warp-ctc always needs to be installed manually.
+
 ## And example of a csv file could be:
 
 row 0: file, transcription, gender, age
