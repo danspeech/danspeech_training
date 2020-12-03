@@ -35,14 +35,14 @@ class DanSpeechAugmenter(DataAugmenter):
                 add_wn,
                 shift_perturb
             ]
+        else:
+            self.augmentations_list = [getattr(self, augmentation) for augmentation in augmentation_list]
 
     def augment(self, recording):
-        scheme = self.choose_augmentation_scheme(self.augmentions_list)
-
-        if len(scheme) > 0:
-            for augmentation in scheme:
-                augmentor = getattr(self, augmentation)
-                recording = augmentor(recording)
+        scheme = self.choose_augmentation_scheme()
+        # Apply the chosen augmentations
+        for augmentation_function in scheme:
+            recording = augmentation_function(recording, self.sampling_rate)
 
         return recording
 
@@ -65,113 +65,113 @@ class DanSpeechAugmenter(DataAugmenter):
 
         return augmentation_scheme
 
+    @staticmethod
+    def speed_perturb(recording, sampling_rate, *args):
+        """
+        Select up/down-sampling randomly between 90% and 110% of original sample rate
 
-def speed_perturb(recording, sampling_rate, *args):
-    """
-    Select up/down-sampling randomly between 90% and 110% of original sample rate
+        :param recording: Recording to be augmented
+        :param sampling_rate: Sampling rate of the recording
+        :return: Augmented recording
+        """
 
-    :param recording: Recording to be augmented
-    :param sampling_rate: Sampling rate of the recording
-    :return: Augmented recording
-    """
+        new_sample_rate = sampling_rate * random.choice([0.9, 1.1])
+        return librosa.core.resample(recording, sampling_rate, new_sample_rate)
 
-    new_sample_rate = sampling_rate * random.choice([0.9, 1.1])
-    return librosa.core.resample(recording, sampling_rate, new_sample_rate)
+    @staticmethod
+    def shift_perturb(recording, sampling_rate, *args):
+        """
+        Shifts the audio recording randomly in time.
 
+        :param recording: Recording to be augmented
+        :param sampling_rate: Sampling rate of the recording
+        :return: Augmented recording
+        """
 
-def shift_perturb(recording, sampling_rate, *args):
-    """
-    Shifts the audio recording randomly in time.
+        shift_ms = np.random.randint(low=-50, high=50)
+        shift_samples = int(shift_ms * sampling_rate / 1000)
 
-    :param recording: Recording to be augmented
-    :param sampling_rate: Sampling rate of the recording
-    :return: Augmented recording
-    """
+        if shift_samples > 0:
+            # time advance
+            recording[:-shift_samples] = recording[shift_samples:]
+            recording[-shift_samples:] = 0
+        elif shift_samples < 0:
+            # time delay
+            recording[-shift_samples:] = recording[:shift_samples]
+            recording[:-shift_samples] = 0
+        return recording
 
-    shift_ms = np.random.randint(low=-50, high=50)
-    shift_samples = int(shift_ms * sampling_rate / 1000)
+    @staticmethod
+    def room_reverb(recording, sampling_rate, *args):
+        """
+        Perturb signal with room reverberations in a randomly generated shoebox room.
 
-    if shift_samples > 0:
-        # time advance
-        recording[:-shift_samples] = recording[shift_samples:]
-        recording[-shift_samples:] = 0
-    elif shift_samples < 0:
-        # time delay
-        recording[-shift_samples:] = recording[:shift_samples]
-        recording[:-shift_samples] = 0
-    return recording
+        :param recording: Recording to be augmented
+        :param sampling_rate: Sampling rate of the recording
+        :return: Augmented recording
+        """
 
+        # generate random room specifications, including absorption factor.
+        alpha = random.uniform(0, 0.4)
 
-def room_reverb(recording, sampling_rate, *args):
-    """
-    Perturb signal with room reverberations in a randomly generated shoebox room.
+        room_length = np.random.uniform(2, 12)
+        room_width = np.random.uniform(2, 6)
+        room_height = 3.0 + np.random.uniform(-0.5, 0.5)
 
-    :param recording: Recording to be augmented
-    :param sampling_rate: Sampling rate of the recording
-    :return: Augmented recording
-    """
+        microphone_x = np.random.uniform(0.5, room_width - 0.5)
+        microphone_y = np.random.uniform(0.5, room_length - 0.5)
+        microphone_height = 1.50 + np.random.uniform(-0.5, 0.5)
 
-    # generate random room specifications, including absorption factor.
-    alpha = random.uniform(0, 0.4)
+        r = 0.5 * np.sqrt(np.random.uniform(0, 1))
+        theta = np.random.uniform(0, 1) * 2 * np.pi
+        source_x = microphone_x + r * np.cos(theta)
+        source_y = microphone_y + r * np.sin(theta)
+        source_height = 1.80 + np.random.uniform(-0.25, 0.25)
 
-    room_length = np.random.uniform(2, 12)
-    room_width = np.random.uniform(2, 6)
-    room_height = 3.0 + np.random.uniform(-0.5, 0.5)
+        # create the room based on the specifications simulated above
+        room = pra.ShoeBox([room_width, room_length, room_height],
+                           fs=sampling_rate,
+                           max_order=17,
+                           absorption=alpha)
 
-    microphone_x = np.random.uniform(0.5, room_width - 0.5)
-    microphone_y = np.random.uniform(0.5, room_length - 0.5)
-    microphone_height = 1.50 + np.random.uniform(-0.5, 0.5)
+        # add recording at source, and a random microphone to room
+        room.add_source([source_x, source_y, source_height], signal=recording)
+        R = np.array([[microphone_x], [microphone_y], [microphone_height]])
+        room.add_microphone_array(pra.MicrophoneArray(R, room.fs))
+        room.image_source_model()
+        room.simulate()
 
-    r = 0.5 * np.sqrt(np.random.uniform(0, 1))
-    theta = np.random.uniform(0, 1) * 2 * np.pi
-    source_x = microphone_x + r * np.cos(theta)
-    source_y = microphone_y + r * np.sin(theta)
-    source_height = 1.80 + np.random.uniform(-0.25, 0.25)
+        # return the reverberation convolved signal
+        return room.mic_array.signals[0, :]
 
-    # create the room based on the specifications simulated above
-    room = pra.ShoeBox([room_width, room_length, room_height],
-                       fs=sampling_rate,
-                       max_order=17,
-                       absorption=alpha)
+    @staticmethod
+    def volume_perturb(recording, *args):
+        """
+        Select a gain in decibels randomly and add to recording
 
-    # add recording at source, and a random microphone to room
-    room.add_source([source_x, source_y, source_height], signal=recording)
-    R = np.array([[microphone_x], [microphone_y], [microphone_height]])
-    room.add_microphone_array(pra.MicrophoneArray(R, room.fs))
-    room.image_source_model(use_libroom=True)
-    room.simulate()
+        :param recording:
+        :return: Augmented recording
+        """
+        gain = np.random.randint(low=5, high=30)
+        recording *= 10. ** (gain / 20.)
+        return recording
 
-    # return the reverberation convolved signal
-    return room.mic_array.signals[0, :]
+    @staticmethod
+    def add_wn(recording, *args):
+        """
+        Add wn white noise with random variance to recording
 
+        :param recording:
+        :return: Augmented recording
+        """
+        # Normalize recording before adding wn
+        mean = np.mean(recording)
+        std = np.std(recording)
 
-def volume_perturb(recording, *args):
-    """
-    Select a gain in decibels randomly and add to recording
+        recording = (recording - mean) / std
 
-    :param recording:
-    :return: Augmented recording
-    """
-    gain = np.random.randint(low=5, high=30)
-    recording *= 10. ** (gain / 20.)
-    return recording
+        variance = np.random.uniform(low=0.5, high=1.8)
+        noise = np.random.normal(0, random.uniform(0, variance), len(recording))
 
-
-def add_wn(recording, *args):
-    """
-    Add wn white noise with random variance to recording
-
-    :param recording:
-    :return: Augmented recording
-    """
-    # Normalize recording before adding wn
-    mean = np.mean(recording)
-    std = np.std(recording)
-
-    recording = (recording - mean) / std
-
-    variance = np.random.uniform(low=0.5, high=1.8)
-    noise = np.random.normal(0, random.uniform(0, variance), len(recording))
-
-    # append noise to signal
-    return recording + noise
+        # append noise to signal
+        return recording + noise

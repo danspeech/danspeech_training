@@ -5,7 +5,7 @@ import warnings
 import json
 
 import torch
-# -- warpctc bindings for pytorch can be found here: https://github.com/SeanNaren/warp-ctc
+# warpctc bindings for pytorch can be found here: https://github.com/SeanNaren/warp-ctc
 from warpctc_pytorch import CTCLoss
 
 from audio.datasets import BatchDataLoader, DanSpeechDataset
@@ -13,7 +13,8 @@ from audio.parsers import SpectrogramAudioParser
 from audio.augmentation import DanSpeechAugmenter
 from danspeech.deepspeech.model import DeepSpeech, supported_rnns
 from danspeech.deepspeech.decoder import GreedyDecoder
-from deepspeech.training_utils import TensorBoardLogger, AverageMeter, reduce_tensor, sum_tensor, get_default_audio_config, serialize
+from deepspeech.training_utils import TensorBoardLogger, AverageMeter, reduce_tensor, sum_tensor, \
+    get_default_audio_config, serialize
 from danspeech.errors.training_errors import ArgumentMissingForOption
 
 
@@ -24,6 +25,9 @@ class NoModelSaveDirSpecified(Warning):
 class NoLoggingDirSpecified(Warning):
     pass
 
+
+class CudaNotAvailable(Warning):
+    pass
 
 class NoModelNameSpecified(Warning):
     pass
@@ -39,13 +43,15 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                  context=20, continue_train=False, finetune=False, train_new=False, num_freeze_layers=None,
                  rnn_type='gru', conv_layers=2, rnn_hidden_layers=5, rnn_hidden_size=800,
                  bidirectional=True, distributed=False, gpu_rank=None, dist_backend='nccl', rank=0,
-                 dist_url='tcp://127.0.0.1:1550', world_size=1):
-
-    # -- set training device
+                 dist_url='tcp://127.0.0.1:1550', world_size=1, danspeech_model=None, augmentations=[]):
+    # set training device
     main_proc = True
+    if cuda and not torch.cuda.is_available():
+        warnings.warn("Specified GPU training but cuda is not available...", CudaNotAvailable)
+
     device = torch.device("cuda" if cuda else "cpu")
 
-    # -- prepare directories for storage and logging.
+    # prepare directories for storage and logging.
     if not model_save_dir:
         warnings.warn("You did not specify a directory for saving the trained model.\n"
                       "Defaulting to ~/.danspeech/custom/ directory.", NoModelSaveDirSpecified)
@@ -72,7 +78,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             "You did not specify a directory for logging training process. Training process will not be logged.",
             NoLoggingDirSpecified)
 
-    # -- handle distributed processing
+    # handle distributed processing
     if distributed:
         import torch.distributed as dist
         from torch.utils.data.distributed import DistributedSampler
@@ -84,23 +90,23 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         dist.init_process_group(backend=dist_backend, init_method=dist_url,
                                 world_size=world_size, rank=rank)
 
-    # -- initialize training metrics
+    # initialize training metrics
     loss_results = torch.Tensor(epochs)
     cer_results = torch.Tensor(epochs)
     wer_results = torch.Tensor(epochs)
 
-    # -- initialize helper variables
+    # initialize helper variables
     avg_loss = 0
     start_epoch = 0
     start_iter = 0
 
-    # -- load and initialize model metrics based on wrapper function
+    # load and initialize model metrics based on wrapper function
     if train_new:
         with open(os.path.dirname(os.path.realpath(__file__)) + '/labels.json', "r", encoding="utf-8") as label_file:
             labels = str(''.join(json.load(label_file)))
 
-        # -- changing the default audio config is highly experimental, make changes with care and expect vastly
-        # -- different results compared to baseline
+        # changing the default audio config is highly experimental, make changes with care and expect vastly
+        # different results compared to baseline
         audio_conf = get_default_audio_config()
 
         rnn_type = rnn_type.lower()
@@ -115,7 +121,8 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                            rnn_type=supported_rnns.get(rnn_type),
                            audio_conf=audio_conf,
                            bidirectional=bidirectional,
-                           streaming_inference_model=False,  # -- streaming inference should always be disabled during training
+                           streaming_inference_model=False,
+                           # streaming inference should always be disabled during training
                            context=context)
         model = model.to(device)
         parameters = model.parameters()
@@ -123,17 +130,21 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                                     momentum=momentum, nesterov=True, weight_decay=1e-5)
 
     if finetune:
-        if not stored_model:
+        if not stored_model and danspeech_model is None:
             raise ArgumentMissingForOption("If you want to finetune, please provide the absolute path"
                                            "to a trained pytorch model object as the stored_model argument")
         else:
-            print("Loading checkpoint model %s" % stored_model)
-            package = torch.load(stored_model, map_location=lambda storage, loc: storage)
-            model = DeepSpeech.load_model_package(package)
-            model = model.to(device)
+            if danspeech_model:
+                print("Using DanSpeech model: {}".format(danspeech_model.model_name))
+                model = danspeech_model.to(device)
+            else:
+                print("Loading checkpoint model %s" % stored_model)
+                package = torch.load(stored_model, map_location=lambda storage, loc: storage)
+                model = DeepSpeech.load_model_package(package)
+                model = model.to(device)
 
             if num_freeze_layers:
-                # -- freezing layers might result in unexpected results, use with cation
+                # freezing layers might result in unexpected results, use with cation
                 model.freeze_layers(num_freeze_layers)
 
             parameters = model.parameters()
@@ -144,7 +155,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                 tensorboard_logger.load_previous_values(start_epoch, package)
 
     if continue_train:
-        # -- continue_training wrapper
+        # continue_training wrapper
         if not stored_model:
             raise ArgumentMissingForOption("If you want to continue training, please support a package with previous"
                                            "training information or use the finetune option instead")
@@ -153,12 +164,12 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             package = torch.load(stored_model, map_location=lambda storage, loc: storage)
             model = DeepSpeech.load_model_package(package)
             model = model.to(device)
-            # -- load stored training information
+            # load stored training information
             optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum,
                                         nesterov=True, weight_decay=weight_decay)
             optim_state = package['optim_dict']
             optimizer.load_state_dict(optim_state)
-            start_epoch = int(package['epoch']) + 1  # -- Index start at 0 for training
+            start_epoch = int(package['epoch']) + 1  # Index start at 0 for training
 
             print("Last successfully trained Epoch: {0}".format(start_epoch))
 
@@ -181,30 +192,30 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             if logging_process:
                 tensorboard_logger.load_previous_values(start_epoch, package)
 
-    # -- initialize DanSpeech augmenter
+    # initialize DanSpeech augmenter
     if augmented_training:
-        augmenter = DanSpeechAugmenter(sampling_rate=model.audio_conf["sampling_rate"])
+        augmenter = DanSpeechAugmenter(sampling_rate=model.audio_conf["sample_rate"], augmentation_list=augmentations)
     else:
         augmenter = None
 
-    # -- initialize audio parser and dataset
-    # -- audio parsers
+    # initialize audio parser and dataset
+    # audio parsers
     training_parser = SpectrogramAudioParser(audio_config=model.audio_conf, data_augmenter=augmenter)
     validation_parser = SpectrogramAudioParser(audio_config=model.audio_conf, data_augmenter=None)
 
-    # -- instantiate data-sets
+    # instantiate data-sets
     training_set = DanSpeechDataset(train_data_path, labels=model.labels, audio_parser=training_parser)
     validation_set = DanSpeechDataset(validation_data_path, labels=model.labels, audio_parser=validation_parser)
 
-    # -- initialize batch loaders
+    # initialize batch loaders
     if not distributed:
-        # -- initialize batch loaders for single GPU or CPU training
+        # initialize batch loaders for single GPU or CPU training
         train_batch_loader = BatchDataLoader(training_set, batch_size=batch_size, num_workers=num_workers,
                                              shuffle=True, pin_memory=True)
         validation_batch_loader = BatchDataLoader(validation_set, batch_size=batch_size, num_workers=num_workers,
                                                   shuffle=False)
     else:
-        # -- initialize batch loaders for distributed training on multiple GPUs
+        # initialize batch loaders for distributed training on multiple GPUs
         train_sampler = DistributedSampler(training_set, num_replicas=world_size, rank=rank)
         train_batch_loader = BatchDataLoader(training_set, batch_size=batch_size,
                                              num_workers=num_workers,
@@ -222,7 +233,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
     criterion = CTCLoss()
     best_wer = None
 
-    # -- verbatim training outputs during progress
+    # verbatim training outputs during progress
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -232,41 +243,41 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
     try:
         for epoch in range(start_epoch, epochs):
             if distributed and epoch != 0:
-                # -- distributed sampling, keep epochs on all GPUs
+                # distributed sampling, keep epochs on all GPUs
                 train_sampler.set_epoch(epoch)
 
             print('started training epoch %d' % (epoch + 1))
             model.train()
 
-            # -- timings per epoch
+            # timings per epoch
             end = time.time()
             start_epoch_time = time.time()
             num_updates = len(train_batch_loader)
 
-            # -- per epoch training loop, iterate over all mini-batches in the training set
+            # per epoch training loop, iterate over all mini-batches in the training set
             for i, (data) in enumerate(train_batch_loader, start=start_iter):
                 if i == num_updates:
                     break
 
-                # -- grab and prepare a sample for a training pass
+                # grab and prepare a sample for a training pass
                 inputs, targets, input_percentages, target_sizes = data
                 input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
 
-                # -- measure data load times, this gives an indication on the number of workers required for latency
-                # -- free training.
+                # measure data load times, this gives an indication on the number of workers required for latency
+                # free training.
                 data_time.update(time.time() - end)
 
-                # -- parse data and perform a training pass
+                # parse data and perform a training pass
                 inputs = inputs.to(device)
 
-                # -- compute the CTC-loss and average over mini-batch
+                # compute the CTC-loss and average over mini-batch
                 out, output_sizes = model(inputs, input_sizes)
                 out = out.transpose(0, 1)
                 float_out = out.float()
                 loss = criterion(float_out, targets, output_sizes, target_sizes).to(device)
                 loss = loss / inputs.size(0)
 
-                # -- check for diverging losses
+                # check for diverging losses
                 if distributed:
                     loss_value = reduce_tensor(loss, world_size).item()
                 else:
@@ -276,21 +287,21 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                     warnings.warn("received an inf loss, setting loss value to 0", InfiniteLossReturned)
                     loss_value = 0
 
-                # -- update average loss, and loss tensor
+                # update average loss, and loss tensor
                 avg_loss += loss_value
                 losses.update(loss_value, inputs.size(0))
 
-                # -- compute gradients and back-propagate errors
+                # compute gradients and back-propagate errors
                 optimizer.zero_grad()
                 loss.backward()
 
-                # -- avoid exploding gradients by clip_grad_norm, defaults to 400
+                # avoid exploding gradients by clip_grad_norm, defaults to 400
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm)
 
-                # -- stochastic gradient descent step
+                # stochastic gradient descent step
                 optimizer.step()
 
-                # -- measure elapsed time
+                # measure elapsed time
                 batch_time.update(time.time() - end)
                 end = time.time()
 
@@ -303,7 +314,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
                 del loss, out, float_out
 
-            # -- report epoch summaries and prepare validation run
+            # report epoch summaries and prepare validation run
             avg_loss /= len(train_batch_loader)
             loss_results[epoch] = avg_loss
             epoch_time = time.time() - start_epoch_time
@@ -311,7 +322,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                   'Time taken (s): {epoch_time:.0f}\t'
                   'Average Loss {loss:.3f}\t'.format(epoch + 1, epoch_time=epoch_time, loss=avg_loss))
 
-            # -- prepare validation specific parameters, and set model ready for evaluation
+            # prepare validation specific parameters, and set model ready for evaluation
             total_cer, total_wer = 0, 0
             model.eval()
             with torch.no_grad():
@@ -319,7 +330,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                     inputs, targets, input_percentages, target_sizes = data
                     input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
 
-                    # -- unflatten targets
+                    # unflatten targets
                     split_targets = []
                     offset = 0
                     targets = targets.numpy()
@@ -332,7 +343,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                     decoded_output, _ = decoder.decode(out, output_sizes)
                     target_strings = decoder.convert_to_strings(split_targets)
 
-                    # -- compute accuracy metrics
+                    # compute accuracy metrics
                     wer, cer = 0, 0
                     for x in range(len(target_strings)):
                         transcript, reference = decoded_output[x][0], target_strings[x][0]
@@ -344,7 +355,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                     del out
 
             if distributed:
-                # -- sums tensor across all devices if distributed training is enabled
+                # sums tensor across all devices if distributed training is enabled
                 total_wer_tensor = torch.tensor(total_wer).to(device)
                 total_wer_tensor = sum_tensor(total_wer_tensor)
                 total_wer = total_wer_tensor.item()
@@ -355,14 +366,14 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
                 del total_wer_tensor, total_cer_tensor
 
-            # -- compute average metrics for the validation pass
+            # compute average metrics for the validation pass
             avg_wer_epoch = (total_wer / len(validation_batch_loader.dataset)) * 100
             avg_cer_epoch = (total_cer / len(validation_batch_loader.dataset)) * 100
 
-            # -- append metrics for logging
+            # append metrics for logging
             loss_results[epoch], wer_results[epoch], cer_results[epoch] = avg_loss, avg_wer_epoch, avg_cer_epoch
 
-            # -- log metrics for tensorboard
+            # log metrics for tensorboard
             if logging_process:
                 logging_values = {
                     "loss_results": loss_results,
@@ -371,16 +382,16 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                 }
                 tensorboard_logger.update(epoch, logging_values)
 
-            # -- print validation metrics summary
+            # print validation metrics summary
             print('Validation Summary Epoch: [{0}]\t'
                   'Average WER {wer:.3f}\t'
                   'Average CER {cer:.3f}\t'.format(epoch + 1, wer=avg_wer_epoch, cer=avg_cer_epoch))
 
-            # -- save model if it has the highest recorded performance on validation.
+            # save model if it has the highest recorded performance on validation.
             if main_proc and (best_wer is None) or (best_wer > wer):
                 model_path = model_save_dir + model_id + '.pth'
 
-                # -- check if the model is uni or bidirectional, and set streaming model accordingly
+                # check if the model is uni or bidirectional, and set streaming model accordingly
                 if not bidirectional:
                     streaming_inference_model = True
                 else:
@@ -395,7 +406,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                 best_wer = wer
                 avg_loss = 0
 
-            # -- reset start iteration for next epoch
+            # reset start iteration for next epoch
             start_iter = 0
 
     except KeyboardInterrupt:
@@ -405,7 +416,6 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 def train_new(model_id, train_data_path, validation_data_path, conv_layers=2, rnn_type='gru', rnn_hidden_layers=5,
               rnn_hidden_size=800, bidirectional=True, epochs=20, model_save_dir=None,
               tensorboard_log_dir=None, **args):
-
     _train_model(model_id, train_data_path, validation_data_path, conv_layers=conv_layers, rnn_type=rnn_type,
                  rnn_hidden_layers=rnn_hidden_layers, rnn_hidden_size=rnn_hidden_size, bidirectional=bidirectional,
                  model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, train_new=True,
@@ -414,7 +424,6 @@ def train_new(model_id, train_data_path, validation_data_path, conv_layers=2, rn
 
 def finetune(model_id, train_data_path, validation_data_path, epochs=20, stored_model=None, model_save_dir=None,
              tensorboard_log_dir=None, num_freeze_layers=None, **args):
-
     _train_model(model_id, train_data_path, validation_data_path, epochs=epochs, stored_model=stored_model,
                  model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, finetune=True,
                  num_freeze_layers=num_freeze_layers, **args)
@@ -422,7 +431,6 @@ def finetune(model_id, train_data_path, validation_data_path, epochs=20, stored_
 
 def continue_training(model_id, train_data_path, validation_data_path, epochs=20, stored_model=None,
                       model_save_dir=None, tensorboard_log_dir=None, **args):
-
     _train_model(model_id, train_data_path, validation_data_path, epochs=epochs, stored_model=stored_model,
                  model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, continue_train=True,
                  augmented_training=True, **args)

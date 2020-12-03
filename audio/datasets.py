@@ -67,11 +67,11 @@ class DanSpeechDataset(Dataset):
         # ToDo: Consider rewriting load audio to use the SpeechFile audio loading setup and benchmark
         f, trans = self.meta[idx]
 
+        trans = trans.lower()
         recording = load_audio_wavPCM(path=self.path_gen(f))
         recording = self.audio_parser.parse_audio(recording)
 
         trans = [self.labels_map.get(c) for c in trans]
-
         return recording, trans
 
 
