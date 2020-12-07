@@ -1,5 +1,4 @@
 import argparse
-import os
 
 from args_parsing import add_standard_train_arguments, add_augmentation_arguments, add_training_parameters, \
     add_audio_parameters, add_neural_network_parameters, add_multi_gpu_parameters, add_gpu_env_if_parsed
