@@ -65,7 +65,7 @@ for i in range(world_size):
     environment["CUDA_VISIBLE_DEVICES"] = gpu_env
     print([str(sys.executable)] + argslist)
     p = subprocess.Popen([str(sys.executable)] + ["{}.py".format(sub_file)] + argslist, stdout=stdout,
-                         stderr=stdout)
+                         stderr=stdout, env=environment)
     workers.append(p)
 
 try:
