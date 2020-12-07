@@ -67,13 +67,13 @@ def sum_tensor(tensor):
     return rt
 
 
-def get_default_audio_config():
+def get_audio_config(normalize=True, sample_rate=16000, window="hamming", window_stride=0.01, window_size=0.02):
     return {
-        "normalize": True,
-        "sample_rate": 16000,
-        "window": "hamming",
-        "window_stride": 0.01,
-        "window_size": 0.02
+        "normalize": normalize,
+        "sample_rate": sample_rate,
+        "window": window,
+        "window_stride": window_stride,
+        "window_size": window_size
     }
 
 

@@ -29,14 +29,16 @@ class DanSpeechAugmenter(DataAugmenter):
         # otherwise default to danspeech schema.
         if not augmentation_list:
             self.augmentations_list = [
-                speed_perturb,
-                room_reverb,
-                volume_perturb,
-                add_wn,
-                shift_perturb
+                self.speed_perturb,
+                self.room_reverb,
+                self.volume_perturb,
+                self.add_wn,
+                self.shift_perturb
             ]
         else:
             self.augmentations_list = [getattr(self, augmentation) for augmentation in augmentation_list]
+
+        print("Using the following augmentations: {}".format(", ".join([x.__name__ for x in self.augmentations_list])))
 
     def augment(self, recording):
         scheme = self.choose_augmentation_scheme()

@@ -14,7 +14,7 @@ from audio.augmentation import DanSpeechAugmenter
 from danspeech.deepspeech.model import DeepSpeech, supported_rnns
 from danspeech.deepspeech.decoder import GreedyDecoder
 from deepspeech.training_utils import TensorBoardLogger, AverageMeter, reduce_tensor, sum_tensor, \
-    get_default_audio_config, serialize
+    get_audio_config, serialize
 from danspeech.errors.training_errors import ArgumentMissingForOption
 
 
@@ -38,13 +38,17 @@ class InfiniteLossReturned(Warning):
 
 
 def _train_model(model_id=None, train_data_path=None, validation_data_path=None, epochs=20, stored_model=None,
-                 model_save_dir=None, tensorboard_log_dir=None, augmented_training=False, batch_size=32,
+                 save_dir=None, use_tensorboard=True, augmented_training=False, batch_size=32,
                  num_workers=6, cuda=False, lr=3e-4, momentum=0.9, weight_decay=1e-5, max_norm=400,
-                 context=20, continue_train=False, finetune=False, train_new=False, num_freeze_layers=None,
-                 rnn_type='gru', conv_layers=2, rnn_hidden_layers=5, rnn_hidden_size=800,
+                 learning_anneal=1.0, context=20, finetune=False, continue_train=False, train_new=False,
+                 num_freeze_layers=None, rnn_type='gru', conv_layers=2, rnn_hidden_layers=5, rnn_hidden_size=800,
                  bidirectional=True, distributed=False, gpu_rank=None, dist_backend='nccl', rank=0,
-                 dist_url='tcp://127.0.0.1:1550', world_size=1, danspeech_model=None, augmentations=[]):
+                 dist_url='tcp://127.0.0.1:1550', world_size=1, danspeech_model=None, augmentations=None,
+                 sampling_rate=16000, window="hamming", window_stride=0.01, window_size=0.02):
+
     # set training device
+    if augmentations is None:
+        augmentations = []
     main_proc = True
     if cuda and not torch.cuda.is_available():
         warnings.warn("Specified GPU training but cuda is not available...", CudaNotAvailable)
@@ -52,13 +56,13 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
     device = torch.device("cuda" if cuda else "cpu")
 
     # prepare directories for storage and logging.
-    if not model_save_dir:
+    if not save_dir:
         warnings.warn("You did not specify a directory for saving the trained model.\n"
                       "Defaulting to ~/.danspeech/custom/ directory.", NoModelSaveDirSpecified)
 
-        model_save_dir = os.path.join(os.path.expanduser('~'), '.danspeech/models/')
+        save_dir = os.path.join(os.path.expanduser('~'), '.danspeech/models/')
 
-    os.makedirs(model_save_dir, exist_ok=True)
+    os.makedirs(save_dir, exist_ok=True)
 
     if not model_id:
         warnings.warn("You did not specify a name for the trained model.\n"
@@ -69,9 +73,9 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
     assert train_data_path, "please specify path to a valid directory with training data"
     assert validation_data_path, "please specify path to a valid directory with validation data"
 
-    if main_proc and tensorboard_log_dir:
+    if main_proc and use_tensorboard:
         logging_process = True
-        tensorboard_logger = TensorBoardLogger(model_id, tensorboard_log_dir)
+        tensorboard_logger = TensorBoardLogger(model_id, save_dir)
     else:
         logging_process = False
         warnings.warn(
@@ -107,7 +111,9 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
         # changing the default audio config is highly experimental, make changes with care and expect vastly
         # different results compared to baseline
-        audio_conf = get_default_audio_config()
+        audio_conf = get_audio_config(normalize=True, sample_rate=sampling_rate, window=window,
+                                      window_stride=window_stride, window_size=window_size)
+
 
         rnn_type = rnn_type.lower()
         conv_layers = conv_layers
@@ -132,7 +138,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
     if finetune:
         if not stored_model and danspeech_model is None:
             raise ArgumentMissingForOption("If you want to finetune, please provide the absolute path"
-                                           "to a trained pytorch model object as the stored_model argument")
+                                           "to a trained pytorch model object as the --continue_model_path argument")
         else:
             if danspeech_model:
                 print("Using DanSpeech model: {}".format(danspeech_model.model_name))
@@ -150,9 +156,6 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
             parameters = model.parameters()
             optimizer = torch.optim.SGD(parameters, lr=lr,
                                         momentum=momentum, nesterov=True, weight_decay=1e-5)
-
-            if logging_process:
-                tensorboard_logger.load_previous_values(start_epoch, package)
 
     if continue_train:
         # continue_training wrapper
@@ -389,7 +392,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
             # save model if it has the highest recorded performance on validation.
             if main_proc and (best_wer is None) or (best_wer > wer):
-                model_path = model_save_dir + model_id + '.pth'
+                model_path = save_dir + model_id + '.pth'
 
                 # check if the model is uni or bidirectional, and set streaming model accordingly
                 if not bidirectional:
@@ -403,6 +406,12 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
                                      context=context)
                            , model_path)
 
+                param_groups = optimizer.param_groups
+                if learning_anneal != 1.0:
+                    for g in param_groups:
+                        g['lr'] = g['lr'] / learning_anneal
+                    print('Learning rate annealed to: {lr:.6f}'.format(lr=g['lr']))
+
                 best_wer = wer
                 avg_loss = 0
 
@@ -411,26 +420,3 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
     except KeyboardInterrupt:
         print('Successfully exited training and stopped all processes.')
-
-
-def train_new(model_id, train_data_path, validation_data_path, conv_layers=2, rnn_type='gru', rnn_hidden_layers=5,
-              rnn_hidden_size=800, bidirectional=True, epochs=20, model_save_dir=None,
-              tensorboard_log_dir=None, **args):
-    _train_model(model_id, train_data_path, validation_data_path, conv_layers=conv_layers, rnn_type=rnn_type,
-                 rnn_hidden_layers=rnn_hidden_layers, rnn_hidden_size=rnn_hidden_size, bidirectional=bidirectional,
-                 model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, train_new=True,
-                 epochs=epochs, augmented_training=True, **args)
-
-
-def finetune(model_id, train_data_path, validation_data_path, epochs=20, stored_model=None, model_save_dir=None,
-             tensorboard_log_dir=None, num_freeze_layers=None, **args):
-    _train_model(model_id, train_data_path, validation_data_path, epochs=epochs, stored_model=stored_model,
-                 model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, finetune=True,
-                 num_freeze_layers=num_freeze_layers, **args)
-
-
-def continue_training(model_id, train_data_path, validation_data_path, epochs=20, stored_model=None,
-                      model_save_dir=None, tensorboard_log_dir=None, **args):
-    _train_model(model_id, train_data_path, validation_data_path, epochs=epochs, stored_model=stored_model,
-                 model_save_dir=model_save_dir, tensorboard_log_dir=tensorboard_log_dir, continue_train=True,
-                 augmented_training=True, **args)

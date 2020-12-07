@@ -2,13 +2,13 @@
 ## Repository structure
 DanSpeech training is an add-on repository to the DanSpeech package. It was developed to help development cycles.
 
-DanSpeech training supports three train wrapper functions all found in the deepspeech.train file. 
+DanSpeech training supports modes: 
 
-1. train_new(), trains a new model from strach
-2. finetune(), takes a previosuly trained model and finetunes on new data
-3. continue_train(), takes a previously trained model which was stopped during training and continues training.
+1. train new model from scratch - train_new.py
+2. continue training an existing model - train_continue.py
+3. finetune an existing model - finetune.py
 
-Furthermore DanSpeech training provides a test script found in the deepspeech.test file. The test evaluates a trained model on a held-out test set and returns WER and CER estimates.
+Furthermore, to evaulate models use the evaluate.py script.
 
 All training and testing requires a specific file structure.
 
@@ -18,9 +18,11 @@ All training and testing requires a specific file structure.
 ## Installation
 To run the training code, follow the steps below. We suggest using a virtual environment.
 
-1. Install [danspeech](https://github.com/danspeech/danspeech) (consider using pytorch 1.1.0 here)
+1. Install [danspeech](https://github.com/danspeech/danspeech)
 2. Install wget through pip 
 3. Install [python bindings for warp-ctc](https://github.com/SeanNaren/warp-ctc)
+
+To use beam search decoding, you need [ctc-decode](https://github.com/parlance/ctcdecode) as well.
 
 The training repo has quite a lot of dependencies, hence this repo includes the `env_train.yml` file with
 versions for all dependencies in a working virtual conda environment. If you have trouble, look at the file for the 
@@ -31,54 +33,44 @@ specific versions or try to install a virtual conda environment with:
 Python bindings for warp-ctc always needs to be installed manually.
 
 ## And example of a csv file could be:
-
-row 0: file, transcription, gender, age
-
-row 1: filename.wav, pandaer er et fantastisk dyr jeg ville ønske de kunne snakke dansk, mand, 34
-
-row 2: filenmae1.wav, koalaer er søde jeg ville ønske de kunne snakke dansk, kvinde, 22
-
+```
+file,trans
+filename.wav,pandaer er et fantastisk dyr jeg ville ønske de kunne snakke dansk
+filenmae1.wav,koalaer er søde jeg ville ønske de kunne snakke dansk
 ...
-
-row n: filenamen.wav, pindsvin er flotte jeg ville ønske de ikke stak så meget, mand, 88
-
+filenamen.wav,pindsvin er flotte jeg ville ønske de ikke stak så meget
+```
+Due to current implementation, audio files need to be placed in same directory as the csv file. 
 ## Example use-cases:
-training with a CPU: 
-```python
-from deepspeech.train import train_new
+Training with a CPU is default. To train with GPU parse --use_gpu to script.
 
-if __name__ == '__main__':
-    train_new(model_id=None, train_data_path='/scratch/s134843/danspeech/', validation_data_path='/scratch/s134843/danspeech/')
+See the args for each of the scripts for more information towards what you can parse.
+
+#### Evaluate an existing model
+```commandline
+python evaluate.py --model_path ~/.danspeech/models/TestModel.pth --test_dataset ~/data/nst/preprocessed_test --transcriptions_out_file test.csv --use_gpu --batch_size 128 --beam_width 20 --decoder beam --lm_path ~/.danspeech/lms/dsl_3gram.klm --alpha 0.7
 ```
 
-training with a GPU:
-```python
-import os
-import sys
-import torch
-from deepspeech.train import finetune, train_new, continue_training
-if torch.cuda.is_available():
-    print("Success")
-    print(torch.cuda.device_count())
-
-if __name__ == '__main__':
-    # -- example code for training a new model
-    train_new(model_id=None, train_data_path='/scratch/s134843/danspeech/', validation_data_path='/scratch/s134843/danspeech/', cuda=True)
-
-    # -- example code for continuation of a new model
-    continue_training(model_id='danish_speaking_panda_finetuned_continued',
-                       train_data_path='/scratch/s134843/danspeech/',
-                       validation_data_path='/scratch/s134843/danspeech/',
-                       stored_model = '/home/s123106/.danspeech/models/danish_speaking_panda_finetuned.pth',
-                       cuda=True)
-
-    # -- example code of finetuning a model
-    finetune(model_id='danish_speaking_panda_finetuned',
-              train_data_path='/scratch/s134843/danspeech/',
-              validation_data_path='/scratch/s134843/danspeech',
-              stored_model='/home/s123106/.danspeech/models/danish_speaking_panda.pth',
-              cuda=True)
+#### Training a new model
+```commandline
+python train_new.py --model_id test_id --train_data_path ~/data/nst/preprocessed_test --validation_data_path ~/data/nst/preprocessed_test --save_dir test_results --use_gpu --epochs 40 --batch_size 16 --train_with_augmentations 
 ```
+
+#### Continue training an existing model
+```commandline
+python train_continue.py --model_id test_id --train_data_path ~/data/nst/preprocessed_test --validation_data_path ~/data/nst/preprocessed_test --save_dir test_results --use_gpu --epochs 40 --batch_size 16 --train_with_augmentations --continue_from_path ~/home/models/dummy.pth
+```
+
+#### Finetuning
+```commandline
+python finetune.py --model_id test_id --train_data_path ~/data/nst/preprocessed_test --validation_data_path ~/data/nst/preprocessed_test --save_dir test_results --use_gpu --epochs 40 --batch_size 16 --train_with_augmentations --stored_model_path ~/home/models/dummy.pth
+```
+
+#### Finetuning DanSpeech models
+```commandline
+python finetune.py --model_id test_id --train_data_path ~/data/nst/preprocessed_test --validation_data_path ~/data/nst/preprocessed_test --save_dir test_results --use_gpu --epochs 40 --batch_size 16 --train_with_augmentations --danspeech_model DanSpeechPrimary 
+```
+
 ## Authors and acknowledgment
 Main authors: 
 * Martin Carsten Nielsen  ([mcnielsen4270@gmail.com](mcnielsen4270@gmail.com))
