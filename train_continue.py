@@ -1,15 +1,17 @@
 import argparse
 
 from args_parsing import add_standard_train_arguments, add_augmentation_arguments, add_training_parameters, \
-    add_continue_training_parameters
+    add_continue_training_parameters, add_multi_gpu_parameters, add_gpu_env_if_parsed
 from deepspeech.train import _train_model
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+
     add_standard_train_arguments(parser)
     add_augmentation_arguments(parser)
     add_training_parameters(parser)
     add_continue_training_parameters(parser)
+    add_multi_gpu_parameters(parser)
 
     args = parser.parse_args()
 

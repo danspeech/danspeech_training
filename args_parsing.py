@@ -1,3 +1,7 @@
+import os
+import sys
+
+
 def add_standard_train_arguments(parser):
     """
     Parameters such as model_id, data and where to save mode.
@@ -58,3 +62,24 @@ def add_finetune_parameters(parser):
     parser.add_argument('--danspeech_model', type=str, help="Which DanSpeech model to finetune.", default=None)
     parser.add_argument('--stored_model_path', type=str,
                         help="Path to a stored model to finetune or continue training from", default=None)
+
+
+def add_multi_gpu_parameters(parser):
+    parser.add_argument('--dist-url', default='tcp://127.0.0.1:1550', type=str,
+                        help='url used to set up distributed training')
+
+    parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
+
+    parser.add_argument('--rank', default=0, type=int,
+                        help='The rank of this process')
+
+    parser.add_argument('--world-size', default=1, type=int,
+                        help='number of distributed processes')
+
+    parser.add_argument('--gpu-rank', default=None,
+                        help='If using distributed parallel for multi-gpu, sets the GPU for the process')
+
+
+def add_gpu_env_if_parsed():
+    os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[1]
+    sys.argv.pop(1)
