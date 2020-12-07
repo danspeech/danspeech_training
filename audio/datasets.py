@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import torch
 from danspeech.audio.resources import load_audio_wavPCM
+from torch import Tensor
 from torch.utils.data import Dataset, DataLoader, ConcatDataset, WeightedRandomSampler, Sampler, BatchSampler, \
     DistributedSampler
 import torch.distributed as dist
@@ -66,6 +67,10 @@ class DanSpeechDataset(Dataset):
 
     def __getitem__(self, idx):
         # ToDo: Consider rewriting load audio to use the SpeechFile audio loading setup and benchmark
+
+        # ToDO: Not sure why we need this check. But we do for multi GPU setup.
+        if type(idx) == Tensor:
+            idx = idx.item()
         f, trans = self.meta[idx]
 
         trans = trans.lower()
@@ -187,7 +192,7 @@ class DanSpeechMultiDataset(ConcatDataset):
             datasets.append(ds)
 
         for ds, w in zip(datasets, weight_list):
-            w_adjusted = w / len(ds) * 1000
+            w_adjusted = float(w) / len(ds) * 1000
             final_weights += [w_adjusted] * len(ds)
 
         self.final_weights = final_weights

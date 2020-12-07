@@ -32,6 +32,8 @@ specific versions or try to install a virtual conda environment with:
 
 Python bindings for warp-ctc always needs to be installed manually.
 
+For multi GPU you additionally need [apex](https://github.com/NVIDIA/apex)
+
 ## And example of a csv file could be:
 ```
 file,trans

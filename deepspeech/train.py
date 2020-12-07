@@ -8,7 +8,8 @@ import torch
 # warpctc bindings for pytorch can be found here: https://github.com/SeanNaren/warp-ctc
 from warpctc_pytorch import CTCLoss
 
-from audio.datasets import BatchDataLoader, DanSpeechDataset
+from audio.datasets import BatchDataLoader, DanSpeechDataset, DanSpeechMultiDataset, MultiDatasetBatchDataLoader, \
+    DistributedWeightedSamplerCustom, DistributedSamplerCustom
 from audio.parsers import SpectrogramAudioParser
 from audio.augmentation import DanSpeechAugmenter
 from danspeech.deepspeech.model import DeepSpeech, supported_rnns
@@ -29,6 +30,7 @@ class NoLoggingDirSpecified(Warning):
 class CudaNotAvailable(Warning):
     pass
 
+
 class NoModelNameSpecified(Warning):
     pass
 
@@ -37,15 +39,14 @@ class InfiniteLossReturned(Warning):
     pass
 
 
-def _train_model(model_id=None, train_data_path=None, validation_data_path=None, epochs=20, stored_model=None,
-                 save_dir=None, use_tensorboard=True, augmented_training=False, batch_size=32,
+def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, validation_data_path=None, epochs=20,
+                 stored_model=None, save_dir=None, use_tensorboard=True, augmented_training=False, batch_size=32,
                  num_workers=6, cuda=False, lr=3e-4, momentum=0.9, weight_decay=1e-5, max_norm=400,
                  learning_anneal=1.0, context=20, finetune=False, continue_train=False, train_new=False,
                  num_freeze_layers=None, rnn_type='gru', conv_layers=2, rnn_hidden_layers=5, rnn_hidden_size=800,
                  bidirectional=True, distributed=False, gpu_rank=None, dist_backend='nccl', rank=0,
                  dist_url='tcp://127.0.0.1:1550', world_size=1, danspeech_model=None, augmentations=None,
                  sampling_rate=16000, window="hamming", window_stride=0.01, window_size=0.02):
-
     # set training device
     if augmentations is None:
         augmentations = []
@@ -70,7 +71,7 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
 
         model_id = "danish_speaking_panda"
 
-    assert train_data_path, "please specify path to a valid directory with training data"
+    assert train_data_paths, "please specify path(s) to a valid directory with training data"
     assert validation_data_path, "please specify path to a valid directory with validation data"
 
     if main_proc and use_tensorboard:
@@ -113,7 +114,6 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
         # different results compared to baseline
         audio_conf = get_audio_config(normalize=True, sample_rate=sampling_rate, window=window,
                                       window_stride=window_stride, window_size=window_size)
-
 
         rnn_type = rnn_type.lower()
         conv_layers = conv_layers
@@ -207,34 +207,53 @@ def _train_model(model_id=None, train_data_path=None, validation_data_path=None,
     validation_parser = SpectrogramAudioParser(audio_config=model.audio_conf, data_augmenter=None)
 
     # instantiate data-sets
-    training_set = DanSpeechDataset(train_data_path, labels=model.labels, audio_parser=training_parser)
+    multi_data_set = False
+    if len(train_data_paths) > 1:
+        assert len(train_data_paths) == len(train_data_weights), "Must provide weights for each dataset"
+        multi_data_set = True
+        training_set = DanSpeechMultiDataset(train_data_paths, train_data_weights, labels=model.labels,
+                                             audio_parser=training_parser)
+    else:
+        training_set = DanSpeechDataset(train_data_paths[0], labels=model.labels, audio_parser=training_parser)
+
     validation_set = DanSpeechDataset(validation_data_path, labels=model.labels, audio_parser=validation_parser)
 
     # initialize batch loaders
     if not distributed:
         # initialize batch loaders for single GPU or CPU training
-        train_batch_loader = BatchDataLoader(training_set, batch_size=batch_size, num_workers=num_workers,
-                                             shuffle=True, pin_memory=True)
+        if multi_data_set:
+            train_data_loader = MultiDatasetBatchDataLoader(training_set, batch_size=batch_size,
+                                                            num_workers=num_workers, pin_memory=True)
+        else:
+            train_batch_loader = BatchDataLoader(training_set, batch_size=batch_size, num_workers=num_workers,
+                                                 shuffle=True, pin_memory=True)
         validation_batch_loader = BatchDataLoader(validation_set, batch_size=batch_size, num_workers=num_workers,
                                                   shuffle=False)
     else:
         # initialize batch loaders for distributed training on multiple GPUs
-        train_sampler = DistributedSampler(training_set, num_replicas=world_size, rank=rank)
+        if multi_data_set:
+            train_sampler = DistributedWeightedSamplerCustom(training_set, num_replicas=world_size, rank=rank)
+        else:
+            train_sampler = DistributedSamplerCustom(training_set, num_replicas=world_size, rank=rank)
+
         train_batch_loader = BatchDataLoader(training_set, batch_size=batch_size,
                                              num_workers=num_workers,
                                              sampler=train_sampler,
                                              pin_memory=True)
 
         validation_sampler = DistributedSampler(validation_set, num_replicas=world_size, rank=rank)
+
         validation_batch_loader = BatchDataLoader(validation_set, batch_size=batch_size,
                                                   num_workers=num_workers,
                                                   sampler=validation_sampler)
 
-        model = DistributedDataParallel(model)
-
     decoder = GreedyDecoder(model.labels)
     criterion = CTCLoss()
     best_wer = None
+    model = model.to(device)
+
+    if distributed:
+        model = DistributedDataParallel(model)
 
     # verbatim training outputs during progress
     batch_time = AverageMeter()

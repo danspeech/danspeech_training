@@ -17,7 +17,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     _train_model(model_id=args.model_id,
-                 train_data_path=args.train_data_path,
+                 train_data_paths=args.train_data_paths,
+                 train_data_weights=args.train_data_weights,
                  validation_data_path=args.validation_data_path,
                  cuda=args.use_gpu,
                  epochs=args.epochs,
@@ -39,5 +40,11 @@ if __name__ == '__main__':
                  rnn_hidden_size=args.hidden_size,
                  rnn_type=args.rnn_type,
                  bidirectional=args.no_bidirectional,
+                 rank=args.rank,
+                 gpu_rank=args.gpu_rank,
+                 world_size=args.world_size,
+                 dist_backend=args.dist_backend,
+                 dist_url=args.dist_url,
+                 distributed=args.gpu_rank is not None,
                  train_new=True
                  )

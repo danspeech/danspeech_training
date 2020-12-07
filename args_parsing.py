@@ -7,7 +7,10 @@ def add_standard_train_arguments(parser):
     Parameters such as model_id, data and where to save mode.
     """
     parser.add_argument('--model_id', type=str, help='Id of model.')
-    parser.add_argument('--train_data_path', type=str, help='Path to folder where training data is located.')
+    parser.add_argument('--train_data_paths', nargs='+',
+                        help='Paths to folders where training data is located. May be multiple paths but then '
+                             'train_data_weights are also required.')
+    parser.add_argument('--train_data_weights', nargs='+', help="Weights for how much to use from each dataset.")
     parser.add_argument('--validation_data_path', type=str, help='Path to folder where training data is located.')
     parser.add_argument('--save_dir', type=str, help='Path to where model and tensorboard logs are saved.')
     parser.add_argument('--no_tensorboard', action='store_true', help='Whether to use tensorboard to track training')
@@ -65,18 +68,18 @@ def add_finetune_parameters(parser):
 
 
 def add_multi_gpu_parameters(parser):
-    parser.add_argument('--dist-url', default='tcp://127.0.0.1:1550', type=str,
+    parser.add_argument('--dist_url', default='tcp://127.0.0.1:1550', type=str,
                         help='url used to set up distributed training')
 
-    parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
+    parser.add_argument('--dist_backend', default='nccl', type=str, help='distributed backend')
 
     parser.add_argument('--rank', default=0, type=int,
                         help='The rank of this process')
 
-    parser.add_argument('--world-size', default=1, type=int,
+    parser.add_argument('--world_size', default=1, type=int,
                         help='number of distributed processes')
 
-    parser.add_argument('--gpu-rank', default=None,
+    parser.add_argument('--gpu_rank', default=None,
                         help='If using distributed parallel for multi-gpu, sets the GPU for the process')
 
 

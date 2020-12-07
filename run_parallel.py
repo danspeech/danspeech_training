@@ -37,7 +37,7 @@ os.makedirs(gpu_log_dir, exist_ok=True)
 device_ids = None
 
 # Add number of GPUS to args
-argslist.append('--world-size')
+argslist.append('--world_size')
 argslist.append(str(world_size))
 
 workers = []
@@ -46,10 +46,18 @@ workers = []
 for i in range(world_size):
 
     # Create rank
-    argslist.append('--rank')
-    argslist.append(str(i))
-    argslist.append('--gpu-rank')
-    argslist.append(str(i))
+    if '--rank' in argslist:
+        argslist[argslist.index('--rank') + 1] = str(i)
+    else:
+        argslist.append('--rank')
+        argslist.append(str(i))
+
+    # Create gpu_rank
+    if '--gpu_rank' in argslist:
+        argslist[argslist.index('--gpu_rank') + 1] = str(i)
+    else:
+        argslist.append('--gpu_rank')
+        argslist.append(str(i))
 
     stdout = None if i == 0 else open(gpu_log_dir + "GPU_" + str(i) + ".log", "w")
 
