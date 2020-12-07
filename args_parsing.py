@@ -1,25 +1,16 @@
-import argparse
-
-from args_parsing import add_standard_train_arguments, add_augmentation_arguments, add_training_parameters, \
-    add_audio_parameters, add_neural_network_parameters
-from deepspeech.train import _train_model
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-
-    add_standard_train_arguments(parser)
-    add_augmentation_arguments(parser)
-    add_training_parameters(parser)
-    add_audio_parameters(parser)
-    add_neural_network_parameters(parser)
-
-    # Standard where to save etc.
+def add_standard_train_arguments(parser):
+    """
+    Parameters such as model_id, data and where to save mode.
+    """
     parser.add_argument('--model_id', type=str, help='Id of model.')
     parser.add_argument('--train_data_path', type=str, help='Path to folder where training data is located.')
     parser.add_argument('--validation_data_path', type=str, help='Path to folder where training data is located.')
     parser.add_argument('--save_dir', type=str, help='Path to where model and tensorboard logs are saved.')
     parser.add_argument('--no_tensorboard', action='store_true', help='Whether to use tensorboard to track training')
+    parser.add_argument('--use_gpu', action='store_true', help='Whether to use GPU', default=False)
 
+
+def add_augmentation_arguments(parser):
     # Augmentations
     parser.add_argument('--train_with_augmentations', action='store_true', help='Whether to train with augmentations.',
                         default=False)
@@ -27,9 +18,9 @@ if __name__ == '__main__':
                         help='Name of augmentations to use. If not given, then all danspeech augmentations are used',
                         default=None)
 
-    parser.add_argument('--use_gpu', action='store_true', help='Whether to use GPU', default=False)
 
-    # Training properties
+def add_training_parameters(parser):
+    # Training parameters
     parser.add_argument('--epochs', type=int, help="Number of epochs to train", default=50)
     parser.add_argument('--batch_size', type=int, help="Number of epochs to train", default=64)
     parser.add_argument('--number_layers_freeze', type=int, help="How many layers to freeze during training.",
@@ -40,43 +31,30 @@ if __name__ == '__main__':
     parser.add_argument('--learning_anneal', default=1.0, type=float,
                         help='Annealing applied to learning rate every epoch')
 
-    # Audio properties
+
+def add_audio_parameters(parser):
+    # Audio parameters
     parser.add_argument('--sampling_rate', default=16000, type=int, help='Sample rate')
     parser.add_argument('--window_size', default=.02, type=float, help='Window size for spectrogram in seconds')
     parser.add_argument('--window_stride', default=.01, type=float, help='Window stride for spectrogram in seconds')
     parser.add_argument('--window', default='hamming', help='Window type for spectrogram generation')
 
-    # Neural network properties
+
+def add_neural_network_parameters(parser):
+    # Neural network parameters
     parser.add_argument('--hidden_size', default=800, type=int, help='Hidden size of RNNs')
     parser.add_argument('--hidden_layers', default=5, type=int, help='Number of RNN layers')
     parser.add_argument('--rnn_type', default='gru', help='Type of the RNN. rnn|gru|lstm are supported')
     parser.add_argument('--no_bidirectional', action='store_false', default=True,
                         help='Turn off bi-directional RNNs, introduces lookahead convolution')
 
-    args = parser.parse_args()
 
-    _train_model(model_id=args.model_id,
-                 train_data_path=args.train_data_path,
-                 validation_data_path=args.validation_data_path,
-                 cuda=args.use_gpu,
-                 epochs=args.epochs,
-                 num_freeze_layers=args.number_layers_freeze,
-                 batch_size=args.batch_size,
-                 save_dir=args.save_dir,
-                 use_tensorboard=not args.no_tensorboard,
-                 augmented_training=args.train_with_augmentations or args.augmentation_list,
-                 augmentations=args.augmentation_list,
-                 lr=args.lr,
-                 momentum=args.momentum,
-                 max_norm=args.max_norm,
-                 learning_anneal=args.learning_anneal,
-                 sampling_rate=args.sampling_rate,
-                 window_stride=args.window_stride,
-                 window_size=args.window_size,
-                 window=args.window,
-                 rnn_hidden_layers=args.hidden_layers,
-                 rnn_hidden_size=args.hidden_size,
-                 rnn_type=args.rnn_type,
-                 bidirectional=args.no_bidirectional,
-                 train_new=True
-                 )
+def add_continue_training_parameters(parser):
+    parser.add_argument('--continue_from_path', type=str, help='Path to model to continue training from.')
+
+
+def add_finetune_parameters(parser):
+    # Use DanSpeech model
+    parser.add_argument('--danspeech_model', type=str, help="Which DanSpeech model to finetune.", default=None)
+    parser.add_argument('--stored_model_path', type=str,
+                        help="Path to a stored model to finetune or continue training from", default=None)
