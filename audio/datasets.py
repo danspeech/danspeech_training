@@ -1,11 +1,12 @@
+import math
 import os
-import torch
 
-from torch.utils.data import Dataset, DataLoader
 import pandas as pd
-
+import torch
 from danspeech.audio.resources import load_audio_wavPCM
-
+from torch.utils.data import Dataset, DataLoader, ConcatDataset, WeightedRandomSampler, Sampler, BatchSampler, \
+    DistributedSampler
+import torch.distributed as dist
 
 class DanSpeechDataset(Dataset):
     """
@@ -22,7 +23,7 @@ class DanSpeechDataset(Dataset):
 
     def __init__(self, root_dir, labels, audio_parser):
 
-        print("Loading dataset...")
+        print("Loading dataset from {}...".format(root_dir))
         self.audio_parser = audio_parser
         self.root_dir = root_dir
         self.labels_map = dict([(labels[i], i) for i in range(len(labels))])
@@ -109,3 +110,113 @@ class BatchDataLoader(DataLoader):
         """
         super(BatchDataLoader, self).__init__(dataset, *args, **kwargs)
         self.collate_fn = _collate_fn
+
+
+class MultiDatasetBatchDataLoader(DataLoader):
+    """
+    Only relevant if not multi GPU.
+    """
+    def __init__(self, danspeech_multi_dataset, batch_size, *args, **kwargs):
+        weighted_sampler = WeightedRandomSampler(danspeech_multi_dataset.final_weights, len(danspeech_multi_dataset))
+        batch_sampler = BatchSampler(weighted_sampler, batch_size=batch_size, drop_last=True)
+        super(MultiDatasetBatchDataLoader, self).__init__(danspeech_multi_dataset, batch_sampler=batch_sampler, *args, **kwargs)
+        self.collate_fn = _collate_fn
+
+
+class DistributedSamplerCustom(Sampler):
+    """Sampler that restricts data loading to a subset of the dataset.
+    It is especially useful in conjunction with
+    :class:`torch.nn.parallel.DistributedDataParallel`. In such case, each
+    process can pass a DistributedSampler instance as a DataLoader sampler,
+    and load a subset of the original dataset that is exclusive to it.
+    .. note::
+        Dataset is assumed to be of constant size.
+    Arguments:
+        dataset: Dataset used for sampling.
+        num_replicas (optional): Number of processes participating in
+            distributed training.
+        rank (optional): Rank of the current process within num_replicas.
+    This is custom class that implements sorta grad i.e. first epoch is sorted
+    assumes data handler sorts data first
+    """
+
+    def __init__(self, dataset, num_replicas=None, rank=None):
+        if num_replicas is None:
+            num_replicas = dist.get_world_size()
+        if rank is None:
+            rank = dist.get_rank()
+        self.dataset = dataset
+        self.num_replicas = num_replicas
+        self.rank = rank
+        self.epoch = 0
+        self.num_samples = int(math.ceil(len(self.dataset) * 1.0 / self.num_replicas))
+        self.total_size = self.num_samples * self.num_replicas
+
+    def __iter__(self):
+        # deterministically shuffle based on epoch
+        g = torch.Generator()
+        g.manual_seed(self.epoch)
+        indices = list(torch.randperm(len(self.dataset), generator=g))
+
+        # add extra samples to make it evenly divisible
+        indices += indices[:(self.total_size - len(indices))]
+        assert len(indices) == self.total_size
+
+        # subsample
+        offset = self.num_samples * self.rank
+        indices = indices[offset:offset + self.num_samples]
+        assert len(indices) == self.num_samples
+
+        return iter(indices)
+
+    def __len__(self):
+        return self.num_samples
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch
+
+
+class DanSpeechMultiDataset(ConcatDataset):
+    def __init__(self, root_dir_list, weight_list, labels, audio_parser):
+        datasets = []
+        final_weights = []
+        total_length = 0
+        for root_dir in root_dir_list:
+            ds = DanSpeechDataset(root_dir, labels, audio_parser)
+            total_length += len(ds)
+            datasets.append(ds)
+
+        for ds, w in zip(datasets, weight_list):
+            w_adjusted = w / len(ds) * 1000
+            final_weights += [w_adjusted] * len(ds)
+
+        self.final_weights = final_weights
+
+        super(DanSpeechMultiDataset, self).__init__(datasets)
+
+
+class DistributedWeightedSamplerCustom(DistributedSampler):
+    """
+    Only relevant for multi-gpu
+    """
+    def __init__(self, danspeech_multi_dataset, num_replicas=None, rank=None):
+        super(DistributedWeightedSamplerCustom, self).__init__(danspeech_multi_dataset, num_replicas=num_replicas, rank=rank, shuffle=False)
+        self.sampler = WeightedRandomSampler(danspeech_multi_dataset.final_weights, len(danspeech_multi_dataset))
+
+    def __iter__(self):
+        # deterministically shuffle based on epoch
+        self.sampler.generator = torch.manual_seed(self.epoch)
+
+        indices = []
+        while len(indices) < self.total_size:
+            indices += list(self.sampler)
+
+        # subsample
+        indices = indices[self.rank:self.total_size:self.num_replicas]
+        if len(indices) != self.num_samples:
+            raise RuntimeError("{} vs {}".format(len(indices), self.num_samples))
+
+        return iter(indices)
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch
