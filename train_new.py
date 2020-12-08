@@ -1,7 +1,7 @@
 import argparse
 
 from args_parsing import add_standard_train_arguments, add_augmentation_arguments, add_training_parameters, \
-    add_audio_parameters, add_neural_network_parameters, add_multi_gpu_parameters, add_gpu_env_if_parsed
+    add_audio_parameters, add_neural_network_parameters, add_multi_gpu_parameters
 from deepspeech.train import _train_model
 
 if __name__ == '__main__':
@@ -46,5 +46,6 @@ if __name__ == '__main__':
                  dist_backend=args.dist_backend,
                  dist_url=args.dist_url,
                  distributed=args.gpu_rank is not None,
+                 save_every_epoch=args.save_every_epoch,
                  train_new=True
                  )

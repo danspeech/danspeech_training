@@ -15,6 +15,7 @@ def add_standard_train_arguments(parser):
     parser.add_argument('--save_dir', type=str, help='Path to where model and tensorboard logs are saved.')
     parser.add_argument('--no_tensorboard', action='store_true', help='Whether to use tensorboard to track training')
     parser.add_argument('--use_gpu', action='store_true', help='Whether to use GPU', default=False)
+    parser.add_argument('--save_every_epoch', type=int, help="Given 5 means save model every 5 epochs.", default=0)
 
 
 def add_augmentation_arguments(parser):
@@ -81,8 +82,3 @@ def add_multi_gpu_parameters(parser):
 
     parser.add_argument('--gpu_rank', default=None,
                         help='If using distributed parallel for multi-gpu, sets the GPU for the process')
-
-
-def add_gpu_env_if_parsed():
-    os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[1]
-    sys.argv.pop(1)

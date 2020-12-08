@@ -46,7 +46,7 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
                  num_freeze_layers=None, rnn_type='gru', conv_layers=2, rnn_hidden_layers=5, rnn_hidden_size=800,
                  bidirectional=True, distributed=False, gpu_rank=None, dist_backend='nccl', rank=0,
                  dist_url='tcp://127.0.0.1:1550', world_size=1, danspeech_model=None, augmentations=None,
-                 sampling_rate=16000, window="hamming", window_stride=0.01, window_size=0.02):
+                 sampling_rate=16000, window="hamming", window_stride=0.01, window_size=0.02, save_every_epoch=0):
     # set training device
     if augmentations is None:
         augmentations = []
@@ -424,6 +424,14 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
                                      distributed=distributed, streaming_model=streaming_inference_model,
                                      context=context)
                            , model_path)
+
+                if save_every_epoch != 0 and epochs != 0 and epochs % save_every_epoch == 0:
+                    model_epochs_save_path = save_dir + model_id + '_epoch_{}'.format(epoch) + '.pth'
+                    torch.save(serialize(model, optimizer=optimizer, epoch=epoch, loss_results=loss_results,
+                                         wer_results=wer_results, cer_results=cer_results,
+                                         distributed=distributed, streaming_model=streaming_inference_model,
+                                         context=context)
+                               , model_epochs_save_path)
 
                 param_groups = optimizer.param_groups
                 if learning_anneal != 1.0:
