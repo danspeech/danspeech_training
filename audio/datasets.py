@@ -219,6 +219,7 @@ class DistributedWeightedSamplerCustom(DistributedSampler):
     def __init__(self, danspeech_multi_dataset, num_replicas=None, rank=None):
         super(DistributedWeightedSamplerCustom, self).__init__(danspeech_multi_dataset, num_replicas=num_replicas, rank=rank, shuffle=False)
         self.sampler = WeightedRandomSampler(danspeech_multi_dataset.final_weights, len(danspeech_multi_dataset))
+        self.epoch = 0
 
     def __iter__(self):
         # deterministically shuffle based on epoch

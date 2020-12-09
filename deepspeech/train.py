@@ -394,14 +394,16 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
             avg_cer_epoch = (total_cer / len(validation_batch_loader.dataset)) * 100
 
             # append metrics for logging
-            loss_results[epoch], wer_results[epoch], cer_results[epoch] = avg_loss, avg_wer_epoch, avg_cer_epoch
+            loss_results[epoch] = avg_loss
+            wer_results[epoch] = avg_wer_epoch
+            cer_results[epoch] = avg_cer_epoch
 
             # log metrics for tensorboard
             if logging_process:
                 logging_values = {
                     "loss_results": loss_results,
-                    "wer": avg_wer_epoch,
-                    "cer": avg_cer_epoch
+                    "wer": wer_results,
+                    "cer": cer_results
                 }
                 tensorboard_logger.update(epoch, logging_values)
 
@@ -410,29 +412,29 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
                   'Average WER {wer:.3f}\t'
                   'Average CER {cer:.3f}\t'.format(epoch + 1, wer=avg_wer_epoch, cer=avg_cer_epoch))
 
+            # check if the model is uni or bidirectional, and set streaming model accordingly
+            if not bidirectional:
+                streaming_inference_model = True
+            else:
+                streaming_inference_model = False
+
             # save model if it has the highest recorded performance on validation.
             if main_proc and (best_wer is None) or (best_wer > wer):
                 model_path = save_dir + model_id + '.pth'
-
-                # check if the model is uni or bidirectional, and set streaming model accordingly
-                if not bidirectional:
-                    streaming_inference_model = True
-                else:
-                    streaming_inference_model = False
                 print("Found better validated model, saving to %s" % model_path)
                 torch.save(serialize(model, optimizer=optimizer, epoch=epoch, loss_results=loss_results,
                                      wer_results=wer_results, cer_results=cer_results,
                                      distributed=distributed, streaming_model=streaming_inference_model,
                                      context=context)
                            , model_path)
-
-                if save_every_epoch != 0 and epochs != 0 and epochs % save_every_epoch == 0:
-                    model_epochs_save_path = save_dir + model_id + '_epoch_{}'.format(epoch) + '.pth'
-                    torch.save(serialize(model, optimizer=optimizer, epoch=epoch, loss_results=loss_results,
-                                         wer_results=wer_results, cer_results=cer_results,
-                                         distributed=distributed, streaming_model=streaming_inference_model,
-                                         context=context)
-                               , model_epochs_save_path)
+            if main_proc and save_every_epoch != 0 and epoch % save_every_epoch == 0:
+                model_epochs_save_path = save_dir + model_id + '_epoch_{}'.format(epoch) + '.pth'
+                print("Saving since save_every_epoch option has been given to %s" % model_epochs_save_path)
+                torch.save(serialize(model, optimizer=optimizer, epoch=epoch, loss_results=loss_results,
+                                     wer_results=wer_results, cer_results=cer_results,
+                                     distributed=distributed, streaming_model=streaming_inference_model,
+                                     context=context)
+                           , model_epochs_save_path)
 
                 param_groups = optimizer.param_groups
                 if learning_anneal != 1.0:

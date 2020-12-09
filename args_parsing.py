@@ -16,6 +16,8 @@ def add_standard_train_arguments(parser):
     parser.add_argument('--no_tensorboard', action='store_true', help='Whether to use tensorboard to track training')
     parser.add_argument('--use_gpu', action='store_true', help='Whether to use GPU', default=False)
     parser.add_argument('--save_every_epoch', type=int, help="Given 5 means save model every 5 epochs.", default=0)
+    parser.add_argument('--number_of_data_workers', type=int,
+                        help="Number of subprocesses to spawn for data extraction (pr. GPU if multi GPU)", default=4)
 
 
 def add_augmentation_arguments(parser):

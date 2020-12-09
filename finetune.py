@@ -53,5 +53,6 @@ if __name__ == '__main__':
                  dist_url=args.dist_url,
                  distributed=args.gpu_rank is not None,
                  save_every_epoch=args.save_every_epoch,
+                 num_workers=args.number_of_data_workers,
                  finetune=True
                  )
