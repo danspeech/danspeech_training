@@ -4,7 +4,8 @@ import torch
 
 import scipy
 import numpy as np
-import librosa
+from librosa import stft
+from librosa import magphase
 
 windows = {'hamming': scipy.signal.hamming, 'hann': scipy.signal.hann, 'blackman': scipy.signal.blackman,
            'bartlett': scipy.signal.bartlett}
@@ -51,10 +52,10 @@ class SpectrogramAudioParser(AudioParser):
             recording = self.data_augmenter.augment(recording)
 
         # STFT
-        D = librosa.stft(recording, n_fft=self.n_fft, hop_length=self.hop_length,
+        D = stft(recording, n_fft=self.n_fft, hop_length=self.hop_length,
                          win_length=self.n_fft, window=self.window)
 
-        spect, phase = librosa.magphase(D)
+        spect, phase = magphase(D)
         # S = log(S+1)
         spect = np.log1p(spect)
         spect = torch.FloatTensor(spect)
