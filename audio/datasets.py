@@ -47,7 +47,10 @@ class DanSpeechDataset(Dataset):
         new_meta = []
         for f, trans in meta:
             if not os.path.isfile(os.path.join(self.root_dir, f)):
+                print("File not found and therefore ignored: {0}".format(f))
                 files_not_found = True
+            elif self.is_bad_ref_trans(trans):
+                print("Trans contained oov characters: {0}".format(trans))
             else:
                 new_meta.append((f, trans))
 
@@ -80,6 +83,14 @@ class DanSpeechDataset(Dataset):
 
         trans = [self.labels_map.get(c) for c in trans]
         return recording, trans
+
+    def is_bad_ref_trans(self, trans):
+        trans = trans.lower()
+        for c in trans:
+            if not c in self.labels_map:
+                return True
+
+        return False
 
 
 def _collate_fn(batch):

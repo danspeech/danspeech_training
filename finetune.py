@@ -21,6 +21,13 @@ if __name__ == '__main__':
 
         model = pretrained_models.get_model_from_string(args.danspeech_model)
 
+        if model:
+            print("Using pretrained DanSpeechModel: {0}".format(args.danspeech_model))
+        else:
+            print("DanSpeech model was given as argument but could not match argument to pretrained model: {0}".format(
+                args.danspeech_model)
+            )
+
     _train_model(model_id=args.model_id,
                  train_data_paths=args.train_data_paths,
                  train_data_weights=args.train_data_weights,

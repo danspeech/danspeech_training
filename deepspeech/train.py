@@ -220,9 +220,10 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
 
     # initialize batch loaders
     if not distributed:
+        print("is not distributed")
         # initialize batch loaders for single GPU or CPU training
         if multi_data_set:
-            train_data_loader = MultiDatasetBatchDataLoader(training_set, batch_size=batch_size,
+            train_batch_loader = MultiDatasetBatchDataLoader(training_set, batch_size=batch_size,
                                                             num_workers=num_workers, pin_memory=True)
         else:
             train_batch_loader = BatchDataLoader(training_set, batch_size=batch_size, num_workers=num_workers,
