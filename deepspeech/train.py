@@ -142,16 +142,17 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
         else:
             if danspeech_model:
                 print("Using DanSpeech model: {}".format(danspeech_model.model_name))
-                model = danspeech_model.to(device)
+                model = danspeech_model
             else:
                 print("Loading checkpoint model %s" % stored_model)
                 package = torch.load(stored_model, map_location=lambda storage, loc: storage)
                 model = DeepSpeech.load_model_package(package)
-                model = model.to(device)
 
             if num_freeze_layers:
                 # freezing layers might result in unexpected results, use with cation
                 model.freeze_layers(num_freeze_layers)
+
+            model = model.to(device)
 
             parameters = model.parameters()
             optimizer = torch.optim.SGD(parameters, lr=lr,
@@ -220,7 +221,6 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
 
     # initialize batch loaders
     if not distributed:
-        print("is not distributed")
         # initialize batch loaders for single GPU or CPU training
         if multi_data_set:
             train_batch_loader = MultiDatasetBatchDataLoader(training_set, batch_size=batch_size,
@@ -254,7 +254,7 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
     model = model.to(device)
 
     if distributed:
-        model = DistributedDataParallel(model)
+        model = DistributedDataParallel(model, device_ids=[int(gpu_rank)])
 
     # verbatim training outputs during progress
     batch_time = AverageMeter()
@@ -316,7 +316,6 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
 
                 # compute gradients and back-propagate errors
                 optimizer.zero_grad()
-                print(loss)
                 loss.backward()
 
                 # avoid exploding gradients by clip_grad_norm, defaults to 400
