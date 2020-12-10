@@ -17,7 +17,7 @@ class TensorBoardLogger(object):
 
     def update(self, epoch, values):
         values = {
-            'Avg. Train Loss': values["loss_results"][epoch],
+            'avg_train_loss': values["loss_results"][epoch],
             'WER': values["wer"][epoch],
             'CER': values["cer"][epoch]
         }
@@ -27,7 +27,7 @@ class TensorBoardLogger(object):
     def load_previous_values(self, start_epoch, values):
         for i in range(start_epoch):
             values = {
-                'Avg. Train Loss': values["loss_results"][i],
+                'avg_train_loss': values["loss_results"][i],
                 'WER': values["wer"][i],
                 'CER': values["cer"][i]
             }
