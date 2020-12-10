@@ -80,7 +80,7 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
         tensorboard_logger = TensorBoardLogger(model_id, save_dir)
     else:
         logging_process = False
-        if not main_proc:
+        if main_proc:
             warnings.warn(
                 "You did not specify a directory for logging training process. Training process will not be logged.",
                 NoLoggingDirSpecified)
