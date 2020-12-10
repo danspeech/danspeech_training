@@ -421,7 +421,7 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
                 streaming_inference_model = False
 
             # save model if it has the highest recorded performance on validation.
-            if main_proc and (best_wer is None) or (best_wer > wer):
+            if main_proc and (best_wer is None or best_wer > wer):
                 model_path = save_dir + model_id + '.pth'
                 print("Found better validated model, saving to %s" % model_path)
                 torch.save(serialize(model, optimizer=optimizer, epoch=epoch, loss_results=loss_results,
