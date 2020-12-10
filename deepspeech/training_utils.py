@@ -55,15 +55,16 @@ class AverageMeter(object):
 
 
 def reduce_tensor(tensor, world_size):
+    print("Reducing shit...")
     rt = tensor.clone()
-    dist.all_reduce(rt, op=dist.reduce_op.SUM)
+    dist.all_reduce(rt, op=dist.ReduceOp.SUM)
     rt /= world_size
     return rt
 
 
 def sum_tensor(tensor):
     rt = tensor.clone()
-    dist.all_reduce(rt, op=dist.reduce_op.SUM)
+    dist.all_reduce(rt, op=dist.ReduceOp.SUM)
     return rt
 
 
