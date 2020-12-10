@@ -87,7 +87,7 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
     if distributed:
         import torch.distributed as dist
         from torch.utils.data.distributed import DistributedSampler
-        from apex.parallel import DistributedDataParallel
+        from torch.nn.parallel import DistributedDataParallel
 
         if gpu_rank:
             torch.cuda.set_device(int(gpu_rank))
@@ -316,6 +316,7 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
 
                 # compute gradients and back-propagate errors
                 optimizer.zero_grad()
+                print(loss)
                 loss.backward()
 
                 # avoid exploding gradients by clip_grad_norm, defaults to 400
