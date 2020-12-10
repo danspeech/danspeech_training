@@ -50,7 +50,8 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
     # set training device
     if augmentations is None:
         augmentations = []
-    main_proc = True
+    main_proc = rank == 0
+    print("Is main proc: {}".format(main_proc))
     if cuda and not torch.cuda.is_available():
         warnings.warn("Specified GPU training but cuda is not available...", CudaNotAvailable)
 
@@ -79,9 +80,10 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
         tensorboard_logger = TensorBoardLogger(model_id, save_dir)
     else:
         logging_process = False
-        warnings.warn(
-            "You did not specify a directory for logging training process. Training process will not be logged.",
-            NoLoggingDirSpecified)
+        if not main_proc:
+            warnings.warn(
+                "You did not specify a directory for logging training process. Training process will not be logged.",
+                NoLoggingDirSpecified)
 
     # handle distributed processing
     if distributed:
