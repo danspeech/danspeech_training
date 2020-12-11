@@ -429,8 +429,8 @@ def _train_model(model_id=None, train_data_paths=None, train_data_weights=None, 
                                      distributed=distributed, streaming_model=streaming_inference_model,
                                      context=context)
                            , model_path)
-            if main_proc and save_every_epoch != 0 and epoch % save_every_epoch == 0:
-                model_epochs_save_path = save_dir + model_id + '_epoch_{}'.format(epoch) + '.pth'
+            if main_proc and save_every_epoch != 0 and (epoch + 1) % save_every_epoch == 0:
+                model_epochs_save_path = save_dir + model_id + '_epoch_{}'.format(epoch + 1) + '.pth'
                 print("Saving since save_every_epoch option has been given to %s" % model_epochs_save_path)
                 torch.save(serialize(model, optimizer=optimizer, epoch=epoch, loss_results=loss_results,
                                      wer_results=wer_results, cer_results=cer_results,
