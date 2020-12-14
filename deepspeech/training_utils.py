@@ -97,6 +97,7 @@ def serialize(model, optimizer=None, epoch=None, iteration=None, loss_results=No
             'rnn_type': supported_rnns_inv.get(model.module.rnn_type, model.module.rnn_type.__name__.lower()),
             'audio_conf': model.module.audio_conf,
             'labels': model.module.labels,
+            'state_dict': model.module.state_dict(),
             'bidirectional': model.module.bidirectional,
         }
     else:
