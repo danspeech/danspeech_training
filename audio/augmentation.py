@@ -25,6 +25,15 @@ class DanSpeechAugmenter(DataAugmenter):
     def __init__(self, sampling_rate, augmentation_list=None):
         self.sampling_rate = sampling_rate
 
+        order = {
+            "speed_perturb": 0,
+            "room_reverb": 1,
+            "volume_perturb": 2,
+            "add_wn": 3,
+            "shift_perturb": 4,
+            "spec_augment": 5
+        }
+
         # Allow user to specify a list of augmentations
         # otherwise default to danspeech schema.
         if not augmentation_list:
@@ -36,9 +45,13 @@ class DanSpeechAugmenter(DataAugmenter):
                 self.shift_perturb
             ]
         else:
-            self.augmentations_list = [getattr(self, augmentation) for augmentation in augmentation_list]
+            augmentations_ordered = sorted([(augmentation, order[augmentation]) for augmentation in augmentation_list],
+                                           key=lambda x: x[1])
 
-        print("Using the following augmentations: {}".format(", ".join([x.__name__ for x in self.augmentations_list])))
+            self.augmentations_list = [getattr(self, augmentation) for (augmentation, _) in augmentations_ordered]
+
+        print("Using the following augmentations in order: {}".format(
+            ", ".join([x.__name__ for x in self.augmentations_list])))
 
     def augment(self, recording):
         scheme = self.choose_augmentation_scheme()
@@ -177,3 +190,33 @@ class DanSpeechAugmenter(DataAugmenter):
 
         # append noise to signal
         return recording + noise
+
+    @staticmethod
+    def spec_augment(spectrogram, *args):
+
+        frequency_masking_para = 27
+        time_masking_para = 50
+        frequency_mask_num = 1
+        time_mask_num = 1
+
+        v = spectrogram.shape[0]
+        tau = spectrogram.shape[1]
+        augmented_spectrogram = spectrogram
+
+        for i in range(frequency_mask_num):
+            f = np.random.uniform(low=0.0, high=frequency_masking_para)
+            f = int(f)
+            f0 = random.randint(0, v - f)
+            augmented_spectrogram[f0:f0 + f, :] = 0
+
+        for i in range(time_mask_num):
+            t = np.random.uniform(low=0.0, high=time_masking_para)
+            t = int(t)
+            t0 = random.randint(0, tau - t)
+            augmented_spectrogram[:, t0:t0 + t] = 0
+
+        return augmented_spectrogram
+
+
+if __name__ == '__main__':
+    DanSpeechAugmenter(sampling_rate=16000, augmentation_list=["spec_augment", "shift_perturb", "speed_perturb", "room_reverb"])
