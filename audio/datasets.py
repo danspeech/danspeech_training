@@ -9,7 +9,6 @@ from torch.utils.data import Dataset, DataLoader, ConcatDataset, WeightedRandomS
     DistributedSampler
 import torch.distributed as dist
 
-
 class DanSpeechDataset(Dataset):
     """
     Specifies a generator class for speech data
@@ -118,6 +117,63 @@ def _collate_fn(batch):
 
     targets = torch.IntTensor(targets)
     return inputs, targets, input_percentages, target_sizes
+
+
+def _collate_fn_wav2vec(batch):
+    def func(p):
+        return p[0].size(0)
+
+    batch = sorted(batch, key=lambda sample: sample[0].size(0), reverse=True)
+    longest_sample = max(batch, key=func)[0]
+    minibatch_size = len(batch)
+    max_seqlength = longest_sample.size(0)
+    audio_inputs = torch.zeros(minibatch_size, max_seqlength)
+    padding = torch.BoolTensor(minibatch_size, max_seqlength).fill_(True)
+    targets = []
+    target_sizes = torch.IntTensor(minibatch_size)
+
+    for i in range(minibatch_size):
+        sample = batch[i]
+        tensor = sample[0]
+        target = sample[1]
+        seq_length = tensor.size(0)
+        audio_inputs[i].narrow(0, 0, seq_length).copy_(tensor)
+        padding_mask_sample = torch.BoolTensor(tensor.size(0)).fill_(False)
+        padding[i].narrow(0, 0, seq_length).copy_(padding_mask_sample)
+        targets.extend(target)
+        target_sizes[i] = len(target)
+
+    targets = torch.IntTensor(targets)
+    net_input = dict()
+    net_input["source"] = audio_inputs
+    net_input["padding_mask"] = padding
+    return net_input, targets, target_sizes
+
+
+class Dan2VecInferenceDataset(DanSpeechDataset):
+    def __init__(self, root_dir, labels):
+        super(Dan2VecInferenceDataset, self).__init__(root_dir, labels, None)
+
+    def __getitem__(self, idx):
+        if type(idx) == Tensor:
+            idx = idx.item()
+        f, trans = self.meta[idx]
+
+        trans = trans.lower()
+        recording = load_audio_wavPCM(path=self.path_gen(f))
+        recording = torch.from_numpy(recording).float()
+
+        trans = [self.labels_map.get(c) for c in trans]
+        return recording, trans
+
+
+class Wav2VecBatchDataLoader(DataLoader):
+    def __init__(self, dataset, *args, **kwargs):
+        """
+        Creates a data loader for AudioDatasets.
+        """
+        super(Wav2VecBatchDataLoader, self).__init__(dataset, *args, **kwargs)
+        self.collate_fn = _collate_fn_wav2vec
 
 
 class BatchDataLoader(DataLoader):
@@ -238,3 +294,22 @@ class DistributedWeightedSamplerCustom(DistributedSampler):
 
     def set_epoch(self, epoch):
         self.epoch = epoch
+
+
+if __name__ == '__main__':
+    manifest_path = "/home/rafje/data/nst/manifest"
+    from fairseq.data import Dictionary
+    dict_path = os.path.join(manifest_path, "dict.ltr.txt")
+    target_dict = Dictionary.load(dict_path)
+    target_dict.symbols[4] = " "
+    labels = target_dict.symbols
+    dataset = Dan2VecInferenceDataset(root_dir="/home/rafje/data/nst/preprocessed_test/", labels=labels)
+
+    dataloader = Wav2VecBatchDataLoader(dataset, batch_size=6, num_workers=1, shuffle=False)
+
+    from tqdm import tqdm
+    for i, (data) in tqdm(enumerate(dataloader), total=len(dataloader)):
+        net_input, targets, target_sizes = data
+        print(net_input["source"].shape)
+        print(net_input["padding_mask"].shape)
+        print(targets.shape)

@@ -26,10 +26,12 @@ if __name__ == '__main__':
     parser.add_argument('--cutoff_prob', default=1.0, type=float,
                         help='Cutoff probability in pruning,default 1.0, no pruning.')
     parser.add_argument('--lm_workers', default=1, type=int, help='Number of LM processes to use')
+    parser.add_argument('--use_wav2vec', action="store_true", help = "Whether to use wav2vec model")
 
     args = parser.parse_args()
 
     test_model(model_path=args.model_path, data_path=args.test_dataset, decoder=args.decoder, cuda=args.use_gpu,
                batch_size=args.batch_size, num_workers=args.num_workers, lm_path=args.lm_path, alpha=args.alpha,
                beta=args.beta, cutoff_top_n=args.cutoff_top_n, cutoff_prob=args.cutoff_prob, beam_width=args.beam_width,
-               lm_workers=args.lm_workers, verbose=args.verbose, transcriptions_out_file=args.transcriptions_out_file)
+               lm_workers=args.lm_workers, verbose=args.verbose, transcriptions_out_file=args.transcriptions_out_file,
+               wav2vec=args.use_wav2vec)
