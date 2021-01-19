@@ -1,3 +1,4 @@
+import os
 
 
 def load_wav2_vec():
@@ -15,3 +16,13 @@ def load_wav2_vec():
         need_attn=False,
     )
     return model
+
+if __name__ == '__main__':
+    from fairseq.data import Dictionary
+    model = load_wav2_vec()
+    manifest_path = "/home/rafje/data/nst/manifest"
+    dict_path = os.path.join(manifest_path, "dict.ltr.txt")
+    target_dict = Dictionary.load(dict_path)
+    target_dict.symbols[4] = " "
+    labels = target_dict.symbols
+    print("Success")

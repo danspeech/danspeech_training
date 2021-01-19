@@ -66,8 +66,15 @@ def test_model(model_path, data_path, decoder="greedy", cuda=False, batch_size=9
             net_input, targets, target_sizes = data
             net_input["source"] = net_input["source"].to(device)
             net_input["padding_mask"] = net_input["padding_mask"].to(device)
-            out = model.get_normalized_probs(model(**net_input), False).transpose(0, 1)
-            decoded_output, _ = decoder.decode(out)
+            net_output = model(**net_input)
+            padding = net_output["encoder_padding_mask"].cpu()
+            out_sizes = torch.zeros(padding.size(0), dtype=torch.int)
+            for i in range(padding.size(0)):
+                out_len = padding.size(1) - padding[i].count_nonzero().int()
+                out_sizes[i] = out_len
+
+            out = model.get_normalized_probs(net_output, False).transpose(0, 1)
+            decoded_output, _ = decoder.decode(out, out_sizes)
         else:
             inputs, targets, input_percentages, target_sizes = data
             input_sizes = input_percentages.mul_(int(inputs.size(3))).int()
